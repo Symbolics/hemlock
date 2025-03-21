@@ -378,7 +378,9 @@
          (found (find trial-pathname (the list *buffer-list*)
                      :key #'buffer-pathname :test #'equal)))
     (cond ((not found)
-           (let ((kind (iolib.os::get-file-kind trial-pathname t)))
+           (let ((kind (if (probe-file trial-pathname)
+                           (iolib.os::get-file-kind trial-pathname t)
+                           :regular-file)))
              (case kind
                (:directory
                 (dired-guts nil nil trial-pathname))
