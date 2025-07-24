@@ -38,7 +38,13 @@
                                (string-downcase (lisp-implementation-type))))
                  :defaults *hemlock-base-directory*))
 
-(asdf:defsystem :hemlock.base
+;;; Main Hemlock system - umbrella system for ASDF hierarchy
+(asdf:defsystem :hemlock
+     :description "Hemlock editor - main umbrella system"
+     :depends-on (:hemlock/base))
+
+;;; Base Hemlock system - core editor functionality
+(asdf:defsystem :hemlock/base
      :pathname #.(make-pathname
                         :directory
                         (pathname-directory *hemlock-base-directory*)
@@ -238,3 +244,72 @@
               :depends-on (core-1)
               :components
               ((:file "clbuild")))))
+
+;;; CLX-based graphical interface for Hemlock
+(asdf:defsystem :hemlock/clx
+     :pathname #.(make-pathname
+                        :directory
+                        (pathname-directory *hemlock-base-directory*)
+                        :defaults *hemlock-base-directory*)
+     :depends-on (:hemlock/base :clx)
+    :components
+    ((:module clx-1
+              :pathname #.(merge-pathnames
+                           (make-pathname
+                            :directory '(:relative "src"))
+                           *hemlock-base-directory*)
+              :components
+              ((:file "bit-stuff")
+               (:file "hunk-draw" :depends-on ("bit-stuff"))
+               (:file "bitmap-rompsite")
+               (:file "ioconnections")
+               (:file "bitmap-input")
+               (:file "bit-display" :depends-on ("hunk-draw"))
+               (:file "bit-screen")
+               (:file "bitmap-ext")))))
+
+;;; Qt-based graphical interface for Hemlock
+(asdf:defsystem :hemlock/qt
+     :pathname #.(make-pathname
+                        :directory
+                        (pathname-directory *hemlock-base-directory*)
+                        :defaults *hemlock-base-directory*)
+     :depends-on (:hemlock/base :qt :qt-repl)
+    :components
+    ((:module qt-1
+              :pathname #.(merge-pathnames
+                           (make-pathname
+                            :directory '(:relative "src"))
+                           *hemlock-base-directory*)
+              :serial t
+              :components
+              ((:file "qt-package")
+               (:file "qt")
+               (:file "browser")
+               (:file "qtconnections")
+               (:file "sugiyama")
+               (:file "graphics")))))
+
+;;; Terminal/TTY interface for Hemlock
+(asdf:defsystem :hemlock/tty
+     :pathname #.(make-pathname
+                        :directory
+                        (pathname-directory *hemlock-base-directory*)
+                        :defaults *hemlock-base-directory*)
+     :depends-on (:hemlock/base)
+    :components
+    ((:module tty-1
+              :pathname #.(merge-pathnames
+                           (make-pathname
+                            :directory '(:relative "src"))
+                           *hemlock-base-directory*)
+              :components
+              ((:file "ioconnections")
+               (:file "terminfo")
+               (:file "termcap" :depends-on ("terminfo"))
+               (:file "tty-disp-rt")
+               (:file "tty-display" :depends-on ("terminfo" "tty-disp-rt"))
+               (:file "tty-screen" :depends-on ("terminfo" "tty-disp-rt"))
+               (:file "tty-stuff")
+               (:file "tty-input" :depends-on ("terminfo"))
+               (:file "linedit" :depends-on ("tty-display"))))))

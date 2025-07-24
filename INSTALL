@@ -5,6 +5,9 @@ About Hemlock
   Originally written as a part of CMUCL, work started in 2002 to make it
   portable to other Common Lisp implementations.
 
+  This version uses a consolidated ASDF system definition (hemlock.asd) that
+  includes all backend systems using the ASDF subsystem naming convention.
+
 
 Backends
 
@@ -28,11 +31,18 @@ Building and invocation of a binary
 
 Building and invocation from the REPL
 
+  ;; Load the main system definition file
   (push #p"/path/to/hemlock/" asdf:*central-registry*)
-  (asdf:operate 'asdf:load-op :hemlock.tty)
-  (asdf:operate 'asdf:load-op :hemlock.clx)
-  (asdf:operate 'asdf:load-op :hemlock.qt)
+  
+  ;; Load the main system (includes core functionality)
+  (asdf:operate 'asdf:load-op :hemlock)
+  
+  ;; Or load specific backends (all depend on hemlock/base)
+  (asdf:operate 'asdf:load-op :hemlock/tty)
+  (asdf:operate 'asdf:load-op :hemlock/clx)
+  (asdf:operate 'asdf:load-op :hemlock/qt)
 
+  ;; Start Hemlock
   (hemlock:hemlock)
 or just
   (ed)    ;SBCL and CCL only

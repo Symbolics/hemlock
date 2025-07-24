@@ -12,7 +12,7 @@ else
 	while test $# -gt 0; do
 		case $1 in
 			tty|clx|qt)
-				backends="$backends :hemlock.$1"
+				backends="$backends :hemlock/$1"
 				echo backend $1 enabled
 				shift
 				;;
@@ -31,7 +31,7 @@ $SBCL <<EOF
 ;; specified, main.lisp has special-cased the tty backend as a fallback,
 ;; so CLX must come last to have a chance of overriding it.
 ;;
-(dolist (system (or '($backends) '(:hemlock.tty :hemlock.clx)))
+(dolist (system (or '($backends) '(:hemlock/tty :hemlock/clx)))
   (asdf:operate 'asdf:load-op system))
 
 (defun hemlock-toplevel ()

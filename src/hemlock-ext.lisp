@@ -71,7 +71,7 @@
 
 
 ;; CLX integration: define this macro unconditionally.  The function
-;; called by its expansion is defined by them hemlock.clx system only.
+;; called by its expansion is defined by the hemlock/clx system only.
 (defmacro with-clx-event-handling ((display handler) &rest body)
   "Evaluates body in a context where events are handled for the display
    by calling handler on the display.  This destroys any previously established

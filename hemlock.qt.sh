@@ -1,5 +1,5 @@
 #!/bin/bash
 clbuild lisp <<EOF
-(asdf:operate 'asdf:load-op :qthemlock)
+(asdf:operate 'asdf:load-op :hemlock/qt)
 (hi::hemlock)
 EOF
