@@ -59,12 +59,12 @@
 
 (defun ensure-in-cm-mode (device)
   (unless (in-cm-mode-p device)
-    (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:enter-ca-mode))
+    (tty-write-cmd (terminfo:tputs terminfo:enter-ca-mode))
     (setf (in-cm-mode-p device) t)))
 
 (defun ensure-not-in-cm-mode (device)
   (when (in-cm-mode-p device)
-    (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:exit-ca-mode))
+    (tty-write-cmd (terminfo:tputs terminfo:exit-ca-mode))
     (setf (in-cm-mode-p device) nil)))
 
 (defun make-linedit-device (name)
@@ -201,18 +201,20 @@
 
 (defmethod device-init ((device tty-device))
   (setup-input)
+  ;; Clear the screen on startup
+  (tty-write-cmd (terminfo:tputs terminfo:clear-screen))
   ;; similar to ordinary tty initialization, but without init-cm-string:
-  (let* ((init-string (termcap :init-string))
-         (init-file (termcap :init-file))
+  (let* ((init-string terminfo:init-1string)
+         (init-file terminfo:init-file)
          (init-file-string (if init-file (get-init-file-string init-file))))
     (tty-write-cmd
-     (hemlock.terminfo:tputs
+     (terminfo:tputs
       (concatenate 'simple-string
 		   (or init-string "")
 		   (or init-file-string "")
 		   ;; Transmit-mode: this makes arrow-keys give sequences matching
 		   ;; the terminfo db.
-		   hemlock.terminfo:keypad-xmit))))
+		   terminfo:keypad-xmit))))
   (redisplay-all))
 
 (defmethod device-exit ((device linedit-device))
@@ -280,7 +282,7 @@
       (hemlock::delete-next-character-command p)))
 
 (defcommand "Linedit Clear Screen" (p) "" ""
-  (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clear-screen)))
+  (tty-write-cmd (terminfo:tputs terminfo:clear-screen)))
 
 (defun install-linedit-mode (buffer)
   (bind-key "Finish Linedit" #k"return" :buffer buffer)
@@ -475,7 +477,7 @@
       (newline backend))))
 
 (defmethod print-in-lines ((backend linedit-device) string)
-  (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clr-eos))
+  (tty-write-cmd (terminfo:tputs terminfo:clr-eos))
   (newline backend)
   (do ((i 0 (1+ i))
        (lines 0))
@@ -492,7 +494,7 @@
 
 (defmethod newline ((backend linedit-device))
   (setf (dirty-p backend) t)
-  (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clr-eol))
+  (tty-write-cmd (terminfo:tputs terminfo:clr-eol))
   (device-write-string (string #\newline))
   (device-write-string (string #\return))
   (device-force-output backend))
@@ -522,11 +524,11 @@
   (cond ((< n current)
          (loop repeat (- current n) 
             do (tty-write-cmd
-		(hemlock.terminfo:tputs hemlock.terminfo:cursor-left))))
+		(terminfo:tputs terminfo:cursor-left))))
         ((> n current)
          (loop repeat (- n current) 
             do (tty-write-cmd
-		(hemlock.terminfo:tputs hemlock.terminfo:cursor-right))))))
+		(terminfo:tputs terminfo:cursor-right))))))
 
 (defun find-row-and-col
     (region-string columns &optional (end (length region-string)))
@@ -549,14 +551,14 @@
   (cond
     ((>= vertical 0)
      (loop repeat vertical do (tty-write-cmd
-			       (hemlock.terminfo:tputs hemlock.terminfo:cursor-up)))
+			       (terminfo:tputs terminfo:cursor-up)))
      (set-column-address col current-col))
     (t
      (loop repeat (abs vertical) do (tty-write-cmd
-				     (hemlock.terminfo:tputs hemlock.terminfo:cursor-down)))
+				     (terminfo:tputs terminfo:cursor-down)))
      (set-column-address col 0)))
   (when clear-to-eos
-    (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clr-eos))))
+    (tty-write-cmd (terminfo:tputs terminfo:clr-eos))))
 
 (defun find-col (str columns &optional (end (length str)))
   (nth-value 1 (find-row-and-col str columns end)))
@@ -566,7 +568,7 @@
   ;; will wrap around to the first column on the same line:
   ;; hence move down if so.
   (when (and (< start end) (zerop (find-col str columns end)))
-    (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:cursor-down))))
+    (tty-write-cmd (terminfo:tputs terminfo:cursor-down))))
 
 ;;; (defun play ()
 ;;;   (iter
@@ -615,7 +617,7 @@
           (setaf font))
         (cond
           ((member c '(#\newline #\return))
-           (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:cursor-down))
+           (tty-write-cmd (terminfo:tputs terminfo:cursor-down))
            (setf col 0))
           ((< (char-code c) 32)
            (device-write-string (string #\?))
@@ -625,7 +627,7 @@
            (incf col)))))
     (when boldp (exit-attribute-mode))
     (unless (eql font *default-color*) (setaf *default-color*))
-    (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:cursor-visible))
+    (tty-write-cmd (terminfo:tputs terminfo:cursor-visible))
     (rem col width)))
 
 (defun linedit-redisplay (backend &key prompt line point fonts)
@@ -1243,7 +1245,7 @@ to the appropriate home directory."
   (let ((device (current-device))
         (nothing-to-do nil))
     (when clear-screen-before-p
-      (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clear-screen))
+      (tty-write-cmd (terminfo:tputs terminfo:clear-screen))
       (when (eq clear-screen-before-p :prompt) (redisplay-all)))
     (ensure-in-cm-mode device)
     (unless keep-current-split-p
@@ -1271,7 +1273,7 @@ to the appropriate home directory."
       (ensure-not-in-cm-mode device)
       (cond
        (clear-screen-after-p
-        (tty-write-cmd (hemlock.terminfo:tputs hemlock.terminfo:clear-screen))
+        (tty-write-cmd (terminfo:tputs terminfo:clear-screen))
         (when nothing-to-do
           (print-in-lines (current-device) nothing-to-do-message))
         (redisplay-all))

@@ -1,23 +1,52 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
-;;;
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: IPS -*-
+;;; Copyright (c) 2025 by Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
+
+;;; Terminal device screen management functions.
+
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
 ;;; **********************************************************************
 ;;;
 ;;; Written by Bill Chiles, except for the code that implements random typeout,
 ;;; which was done by Blaine Burks and Bill Chiles.  The code for splitting
 ;;; windows was rewritten by Blaine Burks to allow more than a 50/50 split.
-;;;
-;;; Terminal device screen management functions.
-;;;
 
 (in-package :hemlock-internals)
 
+(defun tputs-to-string (capability &rest args)
+  "Convert a terminfo capability to a string, handling padding if necessary."
+  (let ((result
+         (cond
+           ;; No capability provided
+           ((null capability) "")
+           ;; Empty string capability
+           ((and (stringp capability) (string= capability "")) "")
+           ;; Capability with parameters - use tparm
+           ((and (stringp capability) args)
+            (let ((result (apply #'terminfo:tparm capability args)))
+              (if result
+                  (terminfo:tputs result :stream nil)
+                  "")))
+           ;; Simple string capability - use directly with tputs for padding
+           ((stringp capability)
+            (let ((result (terminfo:tputs capability :stream nil)))
+              (cond
+                ((null result) "")
+                ((stringp result) result)
+                ((listp result)
+                 ;; tputs returned a list of strings and delays
+                 (with-output-to-string (s)
+                   (dolist (item result)
+                     (when (stringp item)
+                       (write-string item s)))))
+                (t ""))))
+           ;; Non-string capability
+           (t ""))))
+    result))
 
-
+
 ;;;; Terminal screen initialization
 
 (declaim (special *parse-starting-mark*))
@@ -88,6 +117,15 @@
 
 ;;;; Building devices from termcaps.
 
+(defun get-init-file-string (init-file)
+  "Read the contents of an initialization file referenced by terminfo."
+  (when (and init-file (probe-file init-file))
+    (with-open-file (stream init-file :direction :input :if-does-not-exist nil)
+      (when stream
+        (let ((contents (make-string (file-length stream))))
+          (read-sequence contents stream)
+          contents)))))
+
 ;;; MAKE-TTY-DEVICE returns a device built from a termcap.  Some function
 ;;; slots are set to the appropriate function even though the capability
 ;;; might not exist; in this case, we simply set the control string value
@@ -95,110 +133,144 @@
 ;;; on available capability.
 ;;;
 (defun make-tty-device (name)
-  (hemlock.terminfo:set-terminal)
+  (terminfo:set-terminal)
   (register-tty-translations)
   (let ((device (%make-tty-device :name name)))
-    (when (termcap :overstrikes)
+    (when (terminfo:capability :over-strike)
       (error "Terminal sufficiently irritating -- not currently supported."))
     ;;
     ;; A few useful values.
     (setf (tty-device-dumbp device)
-          (not (and (termcap :open-line)
-                    (termcap :delete-line))))
+          (not (and (terminfo:capability :insert-line)
+                    (terminfo:capability :delete-line))))
     ;;
     ;; Get size and speed.
     (multiple-value-bind  (lines cols speed)
                           (get-terminal-attributes)
-      (setf (tty-device-lines device) (or lines (termcap :lines)))
-      (let ((cols (or cols (termcap :columns))))
+      (setf (tty-device-lines device) (or lines (terminfo:capability :lines)))
+      (let ((cols (or cols (terminfo:capability :columns))))
         (setf (tty-device-columns device)
-              (if hemlock.terminfo:auto-right-margin (1- cols) cols)))
+              (if (terminfo:capability :auto-right-margin) (1- cols) cols)))
       (setf (tty-device-speed device) speed))
     ;;
     ;; Some function slots.
     (setf (tty-device-display-string device)
-          (if (termcap :underlines)
+          (if (terminfo:capability :transparent-underline)
               #'display-string-checking-underlines
               #'display-string))
     (setf (tty-device-standout-init device) #'standout-init)
     (setf (tty-device-standout-end device) #'standout-end)
     (setf (tty-device-open-line device)
-          (if (termcap :open-line)
+          (if (terminfo:capability :insert-line)
               #'open-tty-line
               ;; look for scrolling region stuff
               ))
     (setf (tty-device-delete-line device)
-          (if (termcap :delete-line)
+          (if (terminfo:capability :delete-line)
               #'delete-tty-line
               ;; look for reverse scrolling stuff
               ))
     (setf (tty-device-clear-to-eol device)
-          (if (termcap :clear-to-eol)
+          (if (terminfo:capability :clr-eol)
               #'clear-to-eol
               #'space-to-eol))
     (setf (tty-device-clear-lines device) #'clear-lines)
     (setf (tty-device-clear-to-eow device) #'clear-to-eow)
     ;;
     ;; Insert and delete modes.
-    (let ((init-insert-mode (termcap :init-insert-mode))
-          (init-insert-char (termcap :init-insert-char))
-          (end-insert-char (termcap :end-insert-char)))
+    (let ((init-insert-mode (terminfo:capability :enter-insert-mode))
+          (init-insert-char (terminfo:capability :insert-character))
+          (end-insert-char (terminfo:capability :exit-insert-mode)))
       (when (and init-insert-mode (string/= init-insert-mode ""))
         (setf (tty-device-insert-string device) #'tty-insert-string)
         (setf (tty-device-insert-init-string device)
-              (hemlock.terminfo:tputs init-insert-mode))
+              (tputs-to-string init-insert-mode))
         (setf (tty-device-insert-end-string device)
-              (termcap :end-insert-mode)))
+              (tputs-to-string terminfo:exit-insert-mode)))
       (when init-insert-char
         (setf (tty-device-insert-string device) #'tty-insert-string)
         (setf (tty-device-insert-char-init-string device)
-              (hemlock.terminfo:tputs init-insert-char)))
+              (tputs-to-string init-insert-char)))
       (when (and end-insert-char (string/= end-insert-char ""))
         (setf (tty-device-insert-char-end-string device)
-              (hemlock.terminfo:tputs end-insert-char))))
-    (let ((delete-char (termcap :delete-char)))
+              (tputs-to-string end-insert-char))))
+    (let ((delete-char terminfo:delete-character))
       (when delete-char
         (setf (tty-device-delete-char device) #'delete-char)
         (setf (tty-device-delete-char-string device)
-              (hemlock.terminfo:tputs delete-char))
+              (tputs-to-string delete-char))
         (setf (tty-device-delete-init-string device)
-              (hemlock.terminfo:tputs (termcap :init-delete-mode)))
+              (tputs-to-string terminfo:enter-delete-mode))
         (setf (tty-device-delete-end-string device)
-              (hemlock.terminfo:tputs (termcap :end-delete-mode)))))
-    ;;
+              (tputs-to-string terminfo:exit-delete-mode))))
     ;; Some string slots.
     (setf (tty-device-standout-init-string device)
-          (or (hemlock.terminfo:tputs (termcap :init-standout-mode)) ""))
+          (let ((standout-string (tputs-to-string terminfo:enter-standout-mode)))
+            (cond
+              ;; Check if we got a non-empty standout capability
+              ((and standout-string (not (string= standout-string "")))
+               standout-string)
+              ;; Try reverse mode capability instead
+              (t 
+               (let ((reverse-string (tputs-to-string terminfo:enter-reverse-mode)))
+                 (if (and reverse-string (not (string= reverse-string "")))
+                     reverse-string
+                     ;; Fall back to ANSI reverse video
+                     (format nil "~C[7m" #\Escape)))))))
     (setf (tty-device-standout-end-string device)
-          (or (hemlock.terminfo:tputs (termcap :end-standout-mode)) ""))
+          (let ((standout-end-string (tputs-to-string terminfo:exit-standout-mode)))
+            (cond
+              ;; Check if we got a non-empty standout end capability
+              ((and standout-end-string (not (string= standout-end-string "")))
+               standout-end-string)
+              ;; Try attribute reset capability instead
+              (t
+               (let ((attr-end-string (tputs-to-string terminfo:exit-attribute-mode)))
+                 (if (and attr-end-string (not (string= attr-end-string "")))
+                     attr-end-string
+                     ;; Fall back to ANSI normal mode
+                     (format nil "~C[m" #\Escape)))))))
     (setf (tty-device-clear-to-eol-string device)
-          (hemlock.terminfo:tputs (termcap :clear-to-eol)))
-    (let ((clear-string (termcap :clear-display)))
+          (let ((clear-string (tputs-to-string terminfo:clr-eol)))
+            (if (string= clear-string "")
+                (format nil "~C[K" #\Escape)  ; ANSI fallback
+                clear-string)))
+    (let ((clear-string terminfo:clear-screen))
       (unless clear-string
         (error "Terminal not sufficiently powerful enough to run Hemlock."))
-      (setf (tty-device-clear-string device) (hemlock.terminfo:tputs clear-string)))
+      (let ((clear-cmd (tputs-to-string clear-string)))
+        (setf (tty-device-clear-string device) 
+              (if (string= clear-cmd "")
+                  (format nil "~C[2J" #\Escape)  ; ANSI fallback
+                  clear-cmd))))
     (setf (tty-device-open-line-string device)
-          (hemlock.terminfo:tputs (termcap :open-line)))
+          (let ((open-string (tputs-to-string terminfo:insert-line)))
+            (if (string= open-string "")
+                (format nil "~C[L" #\Escape)  ; ANSI fallback
+                open-string)))
     (setf (tty-device-delete-line-string device)
-          (hemlock.terminfo:tputs (termcap :delete-line)))
-    (let* ((init-string (termcap :init-string))
-           (init-file (termcap :init-file))
+          (let ((delete-string (tputs-to-string terminfo:delete-line)))
+            (if (string= delete-string "")
+                (format nil "~C[M" #\Escape)  ; ANSI fallback
+                delete-string)))
+    (let* ((init-string (terminfo:capability :init-1string))
+           (init-file (terminfo:capability :init-file))
            (init-file-string (if init-file (get-init-file-string init-file)))
-           (init-cm-string (termcap :init-cursor-motion)))
+           (init-cm-string (terminfo:capability :cursor-normal)))
       (setf (tty-device-init-string device)
-            (hemlock.terminfo:tputs (concatenate 'simple-string
+            (tputs-to-string (concatenate 'simple-string
                                 (or init-string "")
                                 (or init-file-string "")
                                 (or init-cm-string "")
                                 ;; Transmit-mode: this makes arrow-keys give sequences matching
                                 ;; the terminfo db.
-                                hemlock.terminfo:keypad-xmit))))
-    (setf (tty-device-cm-end-string device)
-          (hemlock.terminfo:tputs
-           (concatenate 'simple-string
-                        (or (termcap :end-cursor-motion) "")
-                        ;; Exit transmit-mode.
-                        hemlock.terminfo:keypad-local)))
+                                (or (terminfo:capability :keypad-xmit) ""))))
+      (setf (tty-device-cm-end-string device)
+            (tputs-to-string
+             (concatenate 'simple-string
+                          (or (terminfo:capability :cursor-normal) "")
+                          ;; Exit transmit-mode.
+                          (or (terminfo:capability :keypad-local) "")))))
     ;;
     ;; Screen image initialization.
     (set-up-screen-image device)

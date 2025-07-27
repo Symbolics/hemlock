@@ -498,7 +498,7 @@
   "Dummy dis-line that we put at the head of window's dis-lines")
 (setf (dis-line-position dummy-line) -1)
 
-(defparameter *modeline-font* '(:fg 7 :bg 4 :bold t))
+(defparameter *modeline-font* '(:fg 15 :bg 12 :bold t))
 
 ;;; SETUP-MODELINE-IMAGE sets up the modeline-dis-line for window using the
 ;;; modeline-fields list.  This is used by tty redisplay too.

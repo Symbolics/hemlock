@@ -1,14 +1,14 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; Copyright (c) CMU All rights reserved.
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
 ;;; **********************************************************************
 ;;;
 ;;;    Written by Bill Chiles.
-;;;
 
 (in-package :hemlock-internals)
 
@@ -217,7 +217,12 @@
 
 (defmethod device-init ((device tty-device))
   (setup-input)
+  ;; Send terminal initialization string first (includes keypad-xmit for arrow keys)
   (tty-write-cmd (tty-device-init-string device))
+  ;; Clear screen using the proper device method (like original Hemlock)
+  (device-clear device)
+  ;; Force output before redisplay
+  (device-force-output device)
   (redisplay-all))
 
 (defmethod device-exit ((device tty-device))

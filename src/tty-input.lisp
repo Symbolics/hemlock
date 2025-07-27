@@ -1,4 +1,6 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: ?
 
 (in-package :hemlock-internals)
 
@@ -40,13 +42,15 @@
 (defvar *tty-translations* (make-hash-table :test #'equal))
 
 (defun register-tty-translations ()
-  (assert hemlock.terminfo:*terminfo*)
+  (assert terminfo:*terminfo*)
   (flet ((reg (string keysym)
-           (let ((string (etypecase string
-                           (character (string string))
-                           (list (coerce string 'simple-string))
-                           (string string))))
-              (setf (gethash string *tty-translations*) keysym))))
+           ;; Only register if string is not nil and not empty
+           (when (and string (not (equal string "")))
+             (let ((string (etypecase string
+                             (character (string string))
+                             (list (coerce string 'simple-string))
+                             (string string))))
+               (setf (gethash string *tty-translations*) keysym)))))
     ;; KLUDGE: There seems to be no way get F1-F4 reliably transmit
     ;; things in the terminfo db, since some terminals transmit them
     ;; as if they were vt100 PF1-PF4, so, register these aliases here.
@@ -56,41 +60,54 @@
     (reg '(#\Esc #\O #\R) #k"F3")
     (reg '(#\Esc #\O #\S) #k"F4")
     ;; Terminfo definitions for F1-F12
-    (reg hemlock.terminfo:key-f1 #k"F1")
-    (reg hemlock.terminfo:key-f2 #k"F2")
-    (reg hemlock.terminfo:key-f3 #k"F3")
-    (reg hemlock.terminfo:key-f4 #k"F4")
-    (reg hemlock.terminfo:key-f5 #k"F5")
-    (reg hemlock.terminfo:key-f6 #k"F6")
-    (reg hemlock.terminfo:key-f7 #k"F7")
-    (reg hemlock.terminfo:key-f8 #k"F8")
-    (reg hemlock.terminfo:key-f9 #k"F9")
-    (reg hemlock.terminfo:key-f10 #k"F10")
-    (reg hemlock.terminfo:key-f11 #k"F11")
-    (reg hemlock.terminfo:key-f12 #k"F12")
+    (reg (terminfo:capability :key-f1) #k"F1")
+    (reg (terminfo:capability :key-f2) #k"F2")
+    (reg (terminfo:capability :key-f3) #k"F3")
+    (reg (terminfo:capability :key-f4) #k"F4")
+    (reg (terminfo:capability :key-f5) #k"F5")
+    (reg (terminfo:capability :key-f6) #k"F6")
+    (reg (terminfo:capability :key-f7) #k"F7")
+    (reg (terminfo:capability :key-f8) #k"F8")
+    (reg (terminfo:capability :key-f9) #k"F9")
+    (reg (terminfo:capability :key-f10) #k"F10")
+    (reg (terminfo:capability :key-f11) #k"F11")
+    (reg (terminfo:capability :key-f12) #k"F12")
     ;; Terminfo definitions for movement keys
-    (reg hemlock.terminfo:key-up #k"Uparrow")
-    (reg hemlock.terminfo:key-down #k"Downarrow")
-    (reg hemlock.terminfo:key-right #k"Rightarrow")
-    (reg hemlock.terminfo:key-left #k"Leftarrow")
-    (reg hemlock.terminfo:key-home #k"Home")
-    (reg hemlock.terminfo:key-end #k"End")
-    (reg hemlock.terminfo:key-ic #k"Insert")
-    (reg hemlock.terminfo:key-dc #k"Delete")
-    (reg hemlock.terminfo:key-ppage #k"Pageup")
-    (reg hemlock.terminfo:key-npage #k"Pagedown")
-    (reg hemlock.terminfo:key-backspace #k"Backspace")
+    (reg (terminfo:capability :key-up) #k"Uparrow")
+    (reg (terminfo:capability :key-down) #k"Downarrow")
+    (reg (terminfo:capability :key-right) #k"Rightarrow")
+    (reg (terminfo:capability :key-left) #k"Leftarrow")
+    (reg (terminfo:capability :key-home) #k"Home")
+    (reg (terminfo:capability :key-end) #k"End")
+    (reg (terminfo:capability :key-ic) #k"Insert")
+    (reg (terminfo:capability :key-dc) #k"Delete")
+    (reg (terminfo:capability :key-ppage) #k"Pageup")
+    (reg (terminfo:capability :key-npage) #k"Pagedown")
+    (reg (terminfo:capability :key-backspace) #k"Backspace")
 
-    (reg hemlock.terminfo:key-sr #k"Shift-Uparrow")
-    (reg hemlock.terminfo:key-sf #k"Shift-Downarrow")
-    (reg hemlock.terminfo:key-sright #k"Shift-Rightarrow")
-    (reg hemlock.terminfo:key-sleft #k"Shift-Leftarrow")
-    (reg hemlock.terminfo:key-shome #k"Shift-Home")
-    (reg hemlock.terminfo:key-send #k"Shift-End")
-    (reg hemlock.terminfo:key-sic #k"Shift-Insert")
-    (reg hemlock.terminfo:key-sdc #k"Shift-Delete")
-    (reg hemlock.terminfo:key-sprevious #k"Shift-Pageup")
-    (reg hemlock.terminfo:key-snext #k"Shift-Pagedown")
+    ;; Standard ANSI arrow key fallbacks (in case terminfo fails)
+    (reg '(#\Esc #\[ #\A) #k"Uparrow")
+    (reg '(#\Esc #\[ #\B) #k"Downarrow") 
+    (reg '(#\Esc #\[ #\C) #k"Rightarrow")
+    (reg '(#\Esc #\[ #\D) #k"Leftarrow")
+    ;; Additional ANSI sequences
+    (reg '(#\Esc #\[ #\H) #k"Home")
+    (reg '(#\Esc #\[ #\F) #k"End")
+    (reg '(#\Esc #\[ #\2 #\~) #k"Insert")
+    (reg '(#\Esc #\[ #\3 #\~) #k"Delete")
+    (reg '(#\Esc #\[ #\5 #\~) #k"Pageup")
+    (reg '(#\Esc #\[ #\6 #\~) #k"Pagedown")
+
+    (reg (terminfo:capability :key-sr) #k"Shift-Uparrow")
+    (reg (terminfo:capability :key-sf) #k"Shift-Downarrow")
+    (reg (terminfo:capability :key-sright) #k"Shift-Rightarrow")
+    (reg (terminfo:capability :key-sleft) #k"Shift-Leftarrow")
+    (reg (terminfo:capability :key-shome) #k"Shift-Home")
+    (reg (terminfo:capability :key-send) #k"Shift-End")
+    (reg (terminfo:capability :key-sic) #k"Shift-Insert")
+    (reg (terminfo:capability :key-sdc) #k"Shift-Delete")
+    (reg (terminfo:capability :key-sprevious) #k"Shift-Pageup")
+    (reg (terminfo:capability :key-snext) #k"Shift-Pagedown")
     
     ;; Xterm definitions, not in terminfo.
 

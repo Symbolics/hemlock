@@ -1,4 +1,4 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: CL-USER -*-
 
 (proclaim '(optimize (safety 3) (speed 0) (debug 3)))
 
@@ -296,7 +296,7 @@
                         :directory
                         (pathname-directory *hemlock-base-directory*)
                         :defaults *hemlock-base-directory*)
-     :depends-on (:hemlock/base)
+     :depends-on (:hemlock/base :terminfo)
     :components
     ((:module tty-1
               :pathname #.(merge-pathnames
@@ -305,11 +305,10 @@
                            *hemlock-base-directory*)
               :components
               ((:file "ioconnections")
-               (:file "terminfo")
-               (:file "termcap" :depends-on ("terminfo"))
                (:file "tty-disp-rt")
-               (:file "tty-display" :depends-on ("terminfo" "tty-disp-rt"))
-               (:file "tty-screen" :depends-on ("terminfo" "tty-disp-rt"))
+               (:file "tty-terminal-ops" :depends-on ("tty-disp-rt"))
+               (:file "tty-display" :depends-on ("tty-disp-rt" "tty-terminal-ops"))
+               (:file "tty-screen" :depends-on ("tty-disp-rt"))
                (:file "tty-stuff")
-               (:file "tty-input" :depends-on ("terminfo"))
+               (:file "tty-input")
                (:file "linedit" :depends-on ("tty-display"))))))

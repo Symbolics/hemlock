@@ -1,19 +1,28 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; Copyright (c) CMU All rights reserved.
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
 ;;; **********************************************************************
 ;;;
 ;;;    Written by Bill Chiles.
-;;;
 
 (in-package :hemlock-internals)
 
 #+(or)
 (export '(redisplay redisplay-all define-tty-font))
+
+;;; Helper functions for terminal capability handling
+(defun valid-string-p (str)
+  "Return T if STR is a non-empty string"
+  (and str (stringp str) (plusp (length str))))
+
+(defun capability-or-default (capability-name default)
+  "Get terminfo capability or return default if not available"
+  (or (terminfo:tputs (terminfo:capability capability-name)) default))
 
 
 
@@ -954,7 +963,10 @@
 ;;; Clearing the device (DEVICE-CLEAR functions).
 
 (defmethod device-clear ((device tty-device))
-  (tty-write-cmd (tty-device-clear-string device))
+  (tty-write-cmd 
+    (if (valid-string-p (tty-device-clear-string device))
+        (tty-device-clear-string device)
+        (format nil "~C[2J" #\Escape)))
   (cursor-motion device 0 0)
   (setf (tty-device-cursor-x device) 0)
   (setf (tty-device-cursor-y device) 0))
@@ -988,15 +1000,16 @@
 
 ;;; CURSOR-MOTION takes two coordinates on the screen's axis,
 ;;; moving the cursor to that location.  X is the column index,
-;;; and y is the line index, but Unix and Termcap believe that
-;;; the default order of indexes is first the line and then the
-;;; column or (y,x).  Because of this, when reversep is non-nil,
-;;; we send first x and then y.
+;;; and y is the line index.
 ;;;
 (defun cursor-motion (device x y)
-  (tty-write-cmd
-   (hemlock.terminfo:tputs
-    (hemlock.terminfo:tparm hemlock.terminfo:cursor-address y x))))
+  "Move cursor to position (X,Y) using optimal method."
+  (declare (fixnum x y))
+  ;; Use centralized terminal operation - coordinates are converted to 1-based inside
+  (term-cursor-address (1+ y) (1+ x))
+  ;; Force output immediately to ensure cursor positioning takes effect
+  ;; before any subsequent text is written, preventing character accumulation.
+  (device-force-output device))
 
 ;;; CM-OUTPUT-COORDINATE outputs the coordinate with respect to the pad.  If
 ;;; there is a pad, then the coordinate needs to be sent as digit-char's (for
@@ -1031,37 +1044,26 @@
 ;;; Writing strings (TTY-DEVICE-DISPLAY-STRING functions)
 
 ;;; Font attribute support: color, bold.
+;;; These functions are now replaced by the centralized terminal operations
+;;; but kept for backward compatibility.
 
 (defun setaf (color)
-  (when hemlock.terminfo:set-a-foreground
-    (tty-write-cmd
-     (hemlock.terminfo:tputs
-      (hemlock.terminfo:tparm hemlock.terminfo:set-a-foreground color)))))
+  (term-set-foreground color))
 
 (defun setab (color)
-  (when hemlock.terminfo:set-a-background
-    (tty-write-cmd
-     (hemlock.terminfo:tputs
-      (hemlock.terminfo:tparm hemlock.terminfo:set-a-background color)))))
+  (term-set-background color))
 
 (defun enter-bold-mode ()
-  (when hemlock.terminfo:enter-bold-mode
-    (tty-write-cmd
-     (hemlock.terminfo:tputs hemlock.terminfo:enter-bold-mode))))
+  (term-enter-bold))
 
 (defun enter-italics-mode ()
-  (when hemlock.terminfo:enter-italics-mode
-    (tty-write-cmd
-     (hemlock.terminfo:tputs hemlock.terminfo:enter-italics-mode))))
+  (term-enter-italics))
 
 (defun enter-underline-mode ()
-  (when hemlock.terminfo:enter-underline-mode
-    (tty-write-cmd
-     (hemlock.terminfo:tputs hemlock.terminfo:enter-underline-mode))))
+  (term-enter-underline))
 
 (defun exit-attribute-mode ()
-  (tty-write-cmd
-   (hemlock.terminfo:tputs hemlock.terminfo:exit-attribute-mode)))
+  (term-exit-attributes))
 
 (defvar *terminal-has-colors* :unknown)
 
@@ -1091,11 +1093,12 @@
           (setf posn start))
         (let ((new-posn (min stop end)))
           (when (eq *terminal-has-colors* :unknown)
-            (setf *terminal-has-colors*
-                  (and hemlock.terminfo:set-a-foreground
-                       hemlock.terminfo:set-a-background
-                       hemlock.terminfo:exit-attribute-mode
-                       t)))
+            (let ((color-result (and terminfo:set-a-foreground
+                                     terminfo:set-a-background
+                                     (not (string= terminfo:set-a-foreground ""))
+                                     (not (string= terminfo:set-a-background ""))
+                                     t)))
+              (setf *terminal-has-colors* color-result)))
           (cond (*terminal-has-colors*
                  (unwind-protect
                      (progn
@@ -1103,10 +1106,10 @@
                                                 font)
                                                ((listp font)
                                                 (getf font :fg)))))
-                         (when (and foreground (<= 0 foreground 9))
+                         (when (and foreground (<= 0 foreground 255))
                            (setaf foreground)))
                        (let ((background (and (listp font) (getf font :bg))))
-                         (when (and background (<= 0 background 9))
+                         (when (and background (<= 0 background 255))
                            (setab background)))
                        (let ((boldp (and (listp font) (getf font :bold))))
                          (when boldp
@@ -1117,10 +1120,22 @@
                        (let ((underlinep (and (listp font) (getf font :underline))))
                          (when underlinep
                            (enter-underline-mode)))
+                       ;; Force output of all color sequences before writing text
+                       (force-output)
                        (device-write-string string posn new-posn))
                    (exit-attribute-mode)))
                 (t
-                 (device-write-string string posn new-posn)))
+                 ;; No color support - check if this is a modeline font and use standout
+                 (let ((use-standout-p (and (listp font)
+                                           (getf font :bg))))
+                   (cond (use-standout-p
+                          (unwind-protect
+                              (progn
+                                (funcall (tty-device-standout-init (device-hunk-device hunk)) hunk)
+                                (device-write-string string posn new-posn))
+                            (funcall (tty-device-standout-end (device-hunk-device hunk)) hunk)))
+                         (t
+                          (device-write-string string posn new-posn))))))
           (setf posn new-posn))))
     (when (< posn end)
       (device-write-string string posn end)))
@@ -1184,8 +1199,7 @@
 
 (defun clear-to-eol (hunk x y)
   (update-cursor hunk x y)
-  (tty-write-cmd
-   (tty-device-clear-to-eol-string (device-hunk-device hunk))))
+  (term-clear-to-eol))
 
 (defun space-to-eol (hunk x y)
   (declare (fixnum x))
@@ -1221,12 +1235,12 @@
 (defun open-tty-line (hunk x y &optional (n 1))
   (update-cursor hunk x y)
   (dotimes (i n)
-    (tty-write-cmd (tty-device-open-line-string (device-hunk-device hunk)))))
+    (term-insert-line)))
 
 (defun delete-tty-line (hunk x y &optional (n 1))
   (update-cursor hunk x y)
   (dotimes (i n)
-    (tty-write-cmd (tty-device-delete-line-string (device-hunk-device hunk)))))
+    (term-delete-line)))
 
 
 ;;; Insert and Delete modes (TTY-DEVICE-INSERT-STRING and TTY-DEVICE-DELETE-CHAR)

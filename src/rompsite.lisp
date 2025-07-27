@@ -1,5 +1,7 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
-;;;
+;;; -*- Mode: LISP; Base: 10; Syntax: ANSI-Common-Lisp; Package: HI -*-
+;;; Copyright (c) 2025 by Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
+
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
@@ -7,7 +9,7 @@
 ;;; **********************************************************************
 ;;;
 ;;; "Site dependent" stuff for the editor while on the IBM RT PC machine.
-;;;
+
 
 (in-package :hi)
 
@@ -212,6 +214,9 @@
 
 (defmethod backend-init-raw-io ((backend (eql :tty)) display)
   (declare (ignore display))
+  ;; Clear the screen immediately before starting Hemlock
+  (format t "~C[2J~C[H" #\Escape #\Escape)
+  (force-output)
   ;; The editor's file descriptor is Unix standard input (0).
   ;; We don't need to affect system:*file-input-handlers* here
   ;; because the init and exit methods for tty redisplay devices
