@@ -24,6 +24,7 @@ The X11 backend is the most full-featured and is almost the same as the original
 - [qt](https://github.com/commonqt/commonqt)
 - [qt-repl](https://github.com/commonqt/qt-repl)
 
+<img width="935" height="992" alt="Screenshot 2025-07-28 143156" src="https://github.com/user-attachments/assets/ac91891e-2a48-4312-a5e0-64d26fbc85b6" />
 
 ## Getting Started
 
