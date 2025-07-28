@@ -1,0 +1,71 @@
+UTF-8 Character Test Suite for Hemlock Editor
+
+1. MATHEMATICAL SYMBOLS
+   =====================
+   Basic operators: + - × ÷ = ≠ ≈ ≤ ≥ ± ∓
+   Set theory: ∈ ∉ ∪ ∩ ⊂ ⊃ ⊆ ⊇ ∅ ∞
+   Calculus: ∂ ∇ ∫ ∮ ∑ ∏ √ ∛ 
+   Logic: ∧ ∨ ¬ → ↔ ∀ ∃ ∴ ∵
+   Greek letters: α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω
+   Arrows: ← → ↑ ↓ ↔ ↕ ⇐ ⇒ ⇑ ⇓ ⇔ ⇕
+
+2. TEXT FORMATTING
+   ================
+   Bold: 𝐀𝐁𝐂 𝐚𝐛𝐜 𝟎𝟏𝟐
+   Italic: 𝐴𝐵𝐶 𝑎𝑏𝑐 
+   Bold Italic: 𝑨𝑩𝑪 𝒂𝒃𝒄
+   Script: 𝒜ℬ𝒞 𝒶𝒷𝒸
+   Fraktur: 𝔄𝔅ℭ 𝔞𝔟𝔠
+   Double-struck: 𝔸𝔹ℂ 𝕒𝕓𝕔
+   Sans-serif: 𝖠𝖡𝖢 𝖺𝖻𝖼
+   Monospace: 𝙰𝙱𝙲 𝚊𝚋𝚌
+
+3. ACCENTED CHARACTERS
+   ===================
+   French: àâäéèêëïîôöùûüÿçÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ
+   Spanish: áéíóúüñ¿¡ÁÉÍÓÚÜÑ
+   German: äöüßÄÖÜ
+   Nordic: åæøÅÆØ
+   Eastern European: ąćęłńóśźżĄĆĘŁŃÓŚŹŻ (Polish)
+   Czech: áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ
+
+4. FOREIGN LANGUAGES
+   ==================
+   Japanese:
+   - Hiragana: あいうえお かきくけこ さしすせそ たちつてと
+   - Katakana: アイウエオ カキクケコ サシスセソ タチツテト
+   - Kanji: 日本語 漢字 東京 大学 私 学生
+   - Mixed text: こんにちは、私の名前は田中です。
+
+   Russian (Cyrillic):
+   - Alphabet: абвгдеёжзийклмнопрстуфхцчшщъыьэюя
+   - Capitals: АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ
+   - Text: Привет! Как дела? Меня зовут Иван.
+
+   Thai:
+   - Consonants: กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ
+   - Vowels: ะาิีึืุูเแโใไ
+   - Text: สวัสดีครับ ผมชื่อ สมชาย
+
+   Hindi (Devanagari):
+   - Consonants: कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह
+   - Vowels: अआइईउऊऋएऐओऔ
+   - Text: नमस्ते, मेरा नाम राम है।
+
+   Arabic:
+   - Letters: ابتثجحخدذرزسشصضطظعغفقكلمنهوي
+   - Text: السلام عليكم ورحمة الله وبركاته
+
+   Chinese (Simplified):
+   - Characters: 你好世界 汉字 中国 北京 上海
+   - Text: 你好，我叫李明，很高兴认识你。
+
+   Korean (Hangul):
+   - Letters: ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ ㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ
+   - Text: 안녕하세요, 저는 김철수입니다.
+
+SPECIAL CHARACTERS & SYMBOLS
+============================
+Currency: $ € £ ¥ ₹ ¢ ₽ ₩ ₨ ₪ ₱ ₿
+Punctuation: « » „ " " ' ' ‚ ‛ … – — ‐ ‑ ‒ ― 
+Misc symbols: © ® ™ § ¶ † ‡ • ‰ ′ ″ ‴ ※ ℃ ℉ ° ∅ ☀ ☁ ☂ ☃ ☄ ★ ☆ ♠ ♣ ♥ ♦

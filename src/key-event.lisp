@@ -302,7 +302,7 @@
         (ecase class
           ((:letter :other :escaped) (go ID))
           (:ISO-start (go ISOCHAR))
-          (:ISO-end (error "Angle brackets must be escaped."))
+          (:ISO-END (error "Angle brackets must be escaped."))
           (:modifier-terminator (error "Dash must be escaped."))
           (:EOF (go FINAL)))
         GOT-MODIFIER
@@ -317,7 +317,7 @@
         (ecase class
           ((:letter :other :escaped) (go ID))
           (:ISO-start (go ISOCHAR))
-          (:ISO-end (error "Angle brackets must be escaped."))
+          (:ISO-END (error "Angle brackets must be escaped."))
           (:modifier-terminator (error "Dash must be escaped."))
           (:EOF (error "Expected something naming a key-event, got EOF.")))
         ISOCHAR
@@ -557,15 +557,59 @@
 ;;;
 (defvar *character-key-events*)
 
+;;; Hash table for Unicode characters that don't fit in the main array
+;;; or when the array isn't properly sized
+(defvar *unicode-character-key-events* (make-hash-table :test #'eql))
+
 (defun char-key-event (char)
   "Returns the key-event associated with char.  This is SETF'able."
   (check-type char character)
-  (svref *character-key-events* (char-code char)))
+  (let ((code (char-code char)))
+    (cond
+      ;; If we have a properly sized array and the character fits, use it
+      ((and (boundp '*character-key-events*)
+            *character-key-events*
+            (< code (length *character-key-events*)))
+       (or (svref *character-key-events* code)
+           ;; If no key event is defined but it's a graphic character,
+           ;; create a default self-inserting key event using the character code as keysym
+           (when (graphic-char-p char)
+             (let ((key-event (get-key-event* code 0)))
+               ;; Define a keysym name for this character so it can be printed
+               (define-keysym code (string char))
+               ;; Set up the reverse mapping so key-event-char works
+               (setf (gethash key-event *key-event-characters*) char)
+               ;; Cache it in the array
+               (setf (svref *character-key-events* code) key-event)
+               key-event))))
+      ;; For Unicode characters beyond the array size, use hash table
+      (t
+       (or (gethash char *unicode-character-key-events*)
+           ;; If no key event is defined but it's a graphic character,
+           ;; create a default self-inserting key event
+           (when (graphic-char-p char)
+             (let ((key-event (get-key-event* code 0)))
+               ;; Define a keysym name for this character so it can be printed
+               (define-keysym code (string char))
+               ;; Set up the reverse mapping so key-event-char works
+               (setf (gethash key-event *key-event-characters*) char)
+               ;; Cache it in the hash table
+               (setf (gethash char *unicode-character-key-events*) key-event)
+               key-event)))))))
 
 (defun (setf char-key-event) (key-event char)
   (check-type char character)
   (check-type key-event key-event)
-  (setf (svref *character-key-events* (char-code char)) key-event))
+  (let ((code (char-code char)))
+    (cond
+      ;; If we have a properly sized array and the character fits, use it
+      ((and (boundp '*character-key-events*)
+            *character-key-events*
+            (< code (length *character-key-events*)))
+       (setf (svref *character-key-events* code) key-event))
+      ;; Otherwise, store in the Unicode hash table
+      (t
+       (setf (gethash char *unicode-character-key-events*) key-event)))))
 
 
 ;;;; DO-ALPHA-KEY-EVENTS.
@@ -666,6 +710,7 @@
   (setf *key-event-characters* (make-hash-table))
   (setf *character-key-events*
         (make-array char-code-limit :initial-element nil))
+  (setf *unicode-character-key-events* (make-hash-table :test #'eql))
 
   (define-key-event-modifier "Hyper" "H")
   (define-key-event-modifier "Super" "S")
