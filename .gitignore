@@ -3,6 +3,7 @@
 *.lib
 *.lx64fsl
 *~
+*.CKP
 c/setpty
 c/setpty.o
 hemlock.core

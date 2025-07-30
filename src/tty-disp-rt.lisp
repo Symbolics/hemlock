@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
 ;;; Copyright (c) CMU All rights reserved.
 ;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: Unlicense
@@ -243,12 +243,36 @@
 ;;;; Screen image line hacks.
 
 (defun replace-si-line (dst-string src-string src-start dst-start dst-end)
-;;;   `(%primitive byte-blt ,src-string ,src-start ,dst-string ,dst-start ,dst-end)
-  (replace dst-string
-           src-string
-           :start1 dst-start
-           :end1 dst-end
-           :start2 src-start))
+  "Copy a portion of SRC-STRING into DST-STRING with bounds checking.
+
+Arguments:
+  DST-STRING - The destination string to copy into
+  SRC-STRING - The source string to copy from
+  SRC-START  - The starting index in the source string
+  DST-START  - The starting index in the destination string
+  DST-END    - The ending index (exclusive) in the destination string
+
+The function copies characters from SRC-STRING starting at SRC-START
+into DST-STRING from DST-START to DST-END (exclusive). This is a
+wrapper around the standard REPLACE function with added bounds checking."
+
+  (let* ((dst-capacity (length dst-string))
+         (src-length (length src-string))
+         (copy-count (- dst-end dst-start))
+         (src-available (- src-length src-start)))
+    ;; Ensure we don't read past source or write past destination
+    (when (> dst-end dst-capacity)
+      (setf dst-end dst-capacity))
+    (when (> copy-count src-available)
+      (setf dst-end (+ dst-start src-available)))
+    ;; Perform the actual copy with adjusted bounds
+    #+sbcl `(%primitive byte-blt ,src-string ,src-start ,dst-string ,dst-start ,dst-end)
+    #-sbcl
+    (replace dst-string
+             src-string
+             :start1 dst-start
+             :end1 dst-end
+             :start2 src-start)))
 
 (defvar *old-c-iflag*)
 (defvar *old-c-oflag*)

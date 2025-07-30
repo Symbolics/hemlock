@@ -1,13 +1,16 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; Copyright (c) CMU All rights reserved.
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
+;;; **********************************************************************
 ;;;
 ;;; **********************************************************************
 ;;;
-;;;    This file contains implementation independent code which implements
+;;; This file contains implementation independent code which implements
 ;;; the Hemlock window primitives and most of the code which defines
 ;;; other aspects of the interface to redisplay.
 ;;;
@@ -19,7 +22,7 @@
 (declaim (special *echo-area-buffer* ; defined in echo.lisp --amb
                   *things-to-do-once*)) ; defined in display.lisp --amb
 
-(defparameter hunk-width-limit 200 "Maximum possible width for any hunk.")
+(defparameter hunk-width-limit 256 "Maximum possible width for any hunk.")
 
 
 ;;;; CURRENT-WINDOW.
@@ -565,6 +568,39 @@
 ;;;    Milkshake.
 ;;;
 (defun change-window-image-height (window new-height)
+  "Adjust the window's display line pool to accommodate a new window height.
+
+This function is called when a window's height changes (typically during terminal
+resize operations) to ensure the window has sufficient dis-lines (display lines)
+available for rendering content.
+
+Arguments:
+  WINDOW     - The window whose image height is being changed
+  NEW-HEIGHT - The new height in lines that the window should support
+
+Algorithm:
+  1. Moves all active dis-lines back to the spare lines pool by:
+     - Linking the last line's cdr to the current spare lines
+     - Moving the first line's content to spare lines
+     - Resetting the first line's cdr to the sentinel
+  2. Ensures the spare lines pool contains at least 2 * new-height dis-lines
+     by allocating additional dis-lines if needed
+
+Side Effects:
+  - Clears the window's current display image (all lines become spare)
+  - Updates the window's height slot to new-height
+  - May allocate new dis-line structures if the pool is insufficient
+  - The window will need to be fully redrawn after this operation
+
+Implementation Notes:
+  - Maintains a pool of 2x the window height to support smooth scrolling
+  - Reuses existing dis-lines when possible to minimize allocation
+  - All new dis-lines are created with the same width as existing ones
+  - The function assumes at least one dis-line exists in spare-lines
+
+This function is typically called during window resize operations to prepare
+the window's internal structures before the actual content is redrawn."
+ 
   ;; Nuke all the lines in the window image.
   (unless (eq (cdr (window-first-line window)) the-sentinel)
     (shiftf (cdr (window-last-line window))

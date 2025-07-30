@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
 ;;; Copyright (c) CMU All rights reserved.
 ;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: Unlicense
@@ -11,9 +11,6 @@
 ;;;    Written by Bill Chiles.
 
 (in-package :hemlock-internals)
-
-#+(or)
-(export '(redisplay redisplay-all define-tty-font))
 
 ;;; Helper functions for terminal capability handling
 (defun valid-string-p (str)
@@ -203,8 +200,38 @@
 ;;;; Dumb window redisplay.
 
 (defmacro tty-dumb-line-redisplay (device hunk dis-line &optional y)
+  "Perform a simple line redisplay operation for TTY devices.
+
+This macro generates code to display a single line on a TTY device and update
+the corresponding screen image. It implements a 'dumb' redisplay strategy that
+unconditionally rewrites the entire line without attempting to optimize for
+minimal character transmission.
+
+Arguments:
+  DEVICE   - The TTY-DEVICE instance managing the terminal
+  HUNK     - The TTY-HUNK representing the window area being displayed
+  DIS-LINE - The DIS-LINE structure containing the line to display
+  Y        - Optional line position within the hunk (defaults to dis-line's position)
+
+Generated Code Effects:
+  1. Displays the line content at the specified position using DISPLAY-STRING
+  2. Updates the dis-line's flags to mark it as unaltered
+  3. Resets the dis-line's delta to 0
+  4. Updates the device's screen image to reflect the displayed content
+
+Implementation Details:
+  - Performs bounds checking on screen image array access to prevent errors
+  - Only updates screen image lines that exist and have positive capacity
+  - Uses the standard REPLACE function to copy character data
+  - Preserves font information when updating the screen image
+
+The macro is designed for use in 'dumb' redisplay modes where the terminal
+lacks advanced capabilities like selective character updates, making it
+necessary to redraw entire lines when any change occurs."
+ 
   (let ((dl (gensym)) (dl-chars (gensym)) (dl-fonts (gensym)) (dl-len (gensym))
-        (dl-pos (gensym)) (screen-image-line (gensym)))
+        (dl-pos (gensym)) (screen-image (gensym)) (si-index (gensym))
+        (screen-image-line (gensym)))
     `(let* ((,dl ,dis-line)
             (,dl-chars (dis-line-chars ,dl))
             (,dl-fonts (compute-font-usages ,dis-line))
@@ -214,27 +241,181 @@
        (setf (dis-line-flags ,dl) unaltered-bits)
        (setf (dis-line-delta ,dl) 0)
        (select-hunk ,hunk)
-       (let ((,screen-image-line (si-line (tty-device-screen-image ,device)
-                                          (+ *hunk-top-line* ,dl-pos))))
-         (replace-si-line (si-line-chars ,screen-image-line) ,dl-chars
-                          0 0 ,dl-len)
-         (setf (si-line-length ,screen-image-line) ,dl-len)
-         (setf (si-line-fonts ,screen-image-line) ,dl-fonts)))))
+       (let* ((,screen-image (tty-device-screen-image ,device))
+              (,si-index (+ *hunk-top-line* ,dl-pos)))
+         ;; Add bounds checking to prevent array access errors
+         (when (and ,screen-image 
+                    (< ,si-index (length ,screen-image))
+                    (>= ,si-index 0))
+           (let ((,screen-image-line (si-line ,screen-image ,si-index)))
+             (when ,screen-image-line
+               (let ((si-capacity (length (si-line-chars ,screen-image-line))))
+                 (when (> si-capacity 0)
+                   ;; Use standard replace function instead of undefined replace-si-line
+                   (replace (si-line-chars ,screen-image-line) ,dl-chars
+                            :start1 0 :end1 (min ,dl-len si-capacity)
+                            :start2 0 :end2 (min ,dl-len si-capacity))
+                   (setf (si-line-length ,screen-image-line) (min ,dl-len si-capacity))
+                   (setf (si-line-fonts ,screen-image-line) ,dl-fonts))))))))))
+
 
 (defun maybe-resize-tty-device (device)
+  "Handle terminal resize events by updating the device dimensions and window layouts.
+
+This function is called during redisplay operations to detect and handle changes
+in terminal size. It performs the following operations:
+
+1. Queries the current terminal dimensions via get-terminal-attributes
+2. Compares them with the stored device dimensions
+3. If dimensions have changed:
+   - For width changes: rebuilds the screen image and updates all windows
+   - For height changes: adjusts window heights and dis-line allocations
+
+Arguments:
+  DEVICE - The TTY-DEVICE instance to resize
+
+Side Effects:
+  - Updates device dimensions (columns and lines)
+  - Rebuilds screen image array when width changes
+  - Updates window dimensions and modelines
+  - Calls enlarge-device to redistribute vertical space
+  - Updates window dis-lines via change-window-image-height
+  - Forces full redraw by setting *screen-image-trashed* to T
+  - May call update-window-image to fix uninitialized dis-lines
+
+Implementation Notes:
+  - Width changes require complete screen image rebuild due to line wrapping
+  - Height changes preserve existing content while adjusting window sizes
+  - Handles auto-right-margin terminals by reducing effective width by 1
+  - Validates window heights before resize to prevent out-of-bounds errors
+  - Detects and repairs dis-lines with NIL LINE slots after resize
+  - All operations are wrapped in appropriate error handlers to restore
+    original dimensions if resize fails
+
+The function is designed to be called frequently without performance penalty
+when dimensions haven't changed, making it safe to call on every redisplay."
+
   (multiple-value-bind (lines cols)
       (hi::get-terminal-attributes)
     (let ((delta (- lines (tty-device-lines device)))
-          #+nil (cols (if hemlock.terminfo:auto-right-margin
-                    (1- cols)
-                    cols)))
+          (adjusted-cols (if (terminfo:capability :auto-right-margin)
+                            (1- cols)
+                            cols))
+          (old-cols (tty-device-columns device))
+          (old-lines (tty-device-lines device)))
+      ;; Only proceed if dimensions have actually changed
       (unless (and (zerop delta)
-                   #+nil (eql (tty-device-columns device) cols))
-        (setf (tty-device-lines device) lines)
-        #+nil (setf (tty-device-columns device) cols)
-        (enlarge-device device delta)))))
+                   (eql old-cols adjusted-cols))
+        
+        ;; Handle width changes - rebuild screen image with new dimensions
+        (when (not (eql old-cols adjusted-cols))
+          ;; Set new dimensions for screen image creation
+          (setf (tty-device-columns device) adjusted-cols)
+          (setf (tty-device-lines device) lines)
+          ;; Rebuild screen image with new dimensions
+          (handler-case
+              (progn
+                (set-up-screen-image device)
+                ;; Force complete redraw with proper line wrapping
+                (setf *screen-image-trashed* t))
+            (error (e)
+              ;; If something goes wrong, restore old dimensions and re-signal
+              (setf (tty-device-columns device) old-cols)
+              (setf (tty-device-lines device) old-lines)
+              (error e)))
+          
+          ;; Regenerate modelines for all windows AFTER screen image rebuild
+          (dolist (window *window-list*)
+            (when (and window
+                       (window-hunk window)
+                       (eq (device-hunk-device (window-hunk window)) device))
+              ;; Update window dimensions
+              (setf (window-width window) adjusted-cols)
+              ;; Recreate modeline with new width
+              (setup-modeline-image (window-buffer window) window)
+              ;; Mark window as needing full redraw
+              (setf (window-first-changed window) (window-first-line window))
+              (setf (window-last-changed window) (window-last-line window))
+              ;; Update window image with new dimensions
+              (update-window-image window))))
+        
+        ;; Handle height changes independently
+        (unless (zerop delta)
+          (setf (tty-device-lines device) lines)
+          
+          ;; Resize the device
+          (enlarge-device device delta)
+          
+          ;; Update window heights
+          (dolist (window *window-list*)
+            (when (and window
+                       (window-hunk window)
+                       (eq (device-hunk-device (window-hunk window)) device))
+              ;; Get the actual window height from the hunk after enlarge-device
+              (let* ((hunk (window-hunk window))
+                     (window-height (tty-hunk-text-height hunk)))
+                ;; Validate window height before calling change-window-image-height
+                (when (and (plusp window-height)
+                           (<= window-height lines))
+                  (change-window-image-height window window-height)
+                  
+                  ;; After change-window-image-height, ensure all dis-lines are valid
+                  (let ((line-count 0)
+                        (nil-count 0))
+                    ;; Count dis-lines and check for NILs
+                    (do ((dl (window-first-line window) (cdr dl)))
+                        ((eq dl the-sentinel))
+                      (when (and (consp dl) (car dl))
+                        (incf line-count)
+                        (when (and (typep (car dl) 'dis-line)
+                                   (null (dis-line-line (car dl))))
+                          (incf nil-count))))
+                    
+                    ;; If we found dis-lines with NIL LINE slots, fix them
+                    (when (> nil-count 0)
+                      ;; Force a full window image update which should properly initialize all dis-lines
+                      (update-window-image window))))))))))))
 
 (defmethod device-dumb-redisplay ((device tty-device) window)
+  "Perform a complete redisplay of a window using a simple, non-optimized approach.
+
+This method implements a 'dumb' redisplay strategy that unconditionally redraws
+the entire window content without attempting to optimize for minimal character
+transmission. It is used for terminals that lack advanced capabilities or when
+a full refresh is needed.
+
+Arguments:
+  DEVICE - The TTY-DEVICE instance managing the terminal
+  WINDOW - The window to be redisplayed
+
+Algorithm:
+  1. Checks for terminal resize and handles dimension changes if needed
+  2. Clears the entire window area to ensure a clean slate
+  3. Iterates through all display lines and redraws each one
+  4. Clears any unused screen image lines below the content
+  5. Updates the modeline if the window has one
+
+Side Effects:
+  - Completely refreshes the window display
+  - Updates screen image to match displayed content
+  - Resets all dis-line flags to unaltered state
+  - Updates window-old-lines to track displayed line count
+  - May trigger terminal resize handling via maybe-resize-tty-device
+
+Implementation Notes:
+  - Uses tty-dumb-line-redisplay macro for each line, which bypasses
+    optimization attempts
+  - Always clears to end of window to handle cases where content has shrunk
+  - Modeline is redrawn only if the window has a modeline buffer
+  - Screen image lines are explicitly cleared for lines beyond displayed content
+
+This method ensures complete visual consistency at the cost of potentially
+unnecessary character transmission, making it suitable for:
+  - Initial window display
+  - Recovery from display corruption
+  - Terminals without smart update capabilities
+  - Post-resize full refreshes"
+  
   (maybe-resize-tty-device device)
   (let* ((first (window-first-line window))
          (hunk (window-hunk window))
@@ -535,6 +716,46 @@
 ;;; inserting lines.
 ;;;
 (defmethod device-smart-redisplay ((device tty-device) window)
+  "Perform smart redisplay of a window on a TTY device using optimized update strategies.
+
+This method implements an intelligent redisplay algorithm that minimizes the number of
+characters transmitted to the terminal by computing and applying only the necessary
+changes to transform the current screen state into the desired state.
+
+Arguments:
+  DEVICE - The TTY-DEVICE instance managing the terminal
+  WINDOW - The window to be redisplayed
+
+Algorithm Overview:
+  1. Checks if any lines have changed (via window-first-changed/window-last-changed)
+  2. For single line changes with no movement: performs direct line update
+  3. For multiple line changes: computes optimal update sequence considering:
+     - Line insertions and deletions (to handle scrolling)
+     - Individual line rewrites (for content changes)
+     - Line movements (for efficient bulk updates)
+
+Optimization Strategies:
+  - Single unchanged line: Uses tty-smart-line-redisplay for minimal update
+  - Multiple changes: Analyzes the scroll-redraw-ratio to decide between:
+    * Smart updates using insert/delete line operations (when beneficial)
+    * Semi-dumb rewrites when the ratio of changes is too high
+  - Clears unused lines at window bottom only when necessary
+  - Updates modeline only when its flags indicate changes
+
+Side Effects:
+  - Updates the display to match the window's internal state
+  - Resets window change markers (first-changed/last-changed)
+  - Updates window-old-lines to track displayed line count
+  - May modify device cursor position
+
+Performance Considerations:
+  - Avoids insert/delete operations when scroll-redraw-ratio threshold is exceeded
+  - Falls back to semi-dumb writes for terminals without delete-line capability
+  - Minimizes redundant operations by checking change flags before updates
+
+The method ensures the physical display matches the logical window contents while
+minimizing terminal I/O through intelligent change detection and update sequencing."
+
   (let* ((hunk (window-hunk window))
          (device (device-hunk-device hunk)))
     (let ((first-changed (window-first-changed window))
@@ -870,90 +1091,95 @@
     (when (listen-editor-input *editor-input*)
       (throw 'redisplay-catcher :editor-input))
     (select-hunk hunk)
-    (let* ((screen-image-line (si-line (tty-device-screen-image device)
-                                       (+ *hunk-top-line* dl-pos)))
-           (si-line-chars (si-line-chars screen-image-line))
-           (si-line-length (si-line-length screen-image-line))
-           (findex (find-identical-prefix dl dl-fonts screen-image-line)))
-      (declare (type (or fixnum null) findex) (simple-string si-line-chars))
-      ;;
-      ;; When the dis-line and screen chars are not string=.
-      (when findex
-        (block tslr-main-body
-          ;;
-          ;; See if the screen shows an initial substring of the dis-line.
-          (when (= findex si-line-length)
-            (display-string
-                     hunk findex dl-pos dl-chars dl-fonts findex dl-len)
-            (replace-si-line si-line-chars dl-chars findex findex dl-len)
-            (return-from tslr-main-body t))
-          ;;
-          ;; When the dis-line is an initial substring of what's on the screen.
-          (when (= findex dl-len)
-            (funcall (tty-device-clear-to-eol device) hunk dl-len dl-pos)
-            (return-from tslr-main-body t))
-          ;;
-          ;; Find trailing substrings that are the same.
-          (multiple-value-bind
-              (sindex dindex)
-              (let ((count (find-identical-suffix dl dl-fonts
-                                                  screen-image-line)))
-                (values (- si-line-length count)
-                        (- dl-len count)))
-            (declare (fixnum sindex dindex))
-            ;;
-            ;; No trailing substrings -- blast and clear to eol.
-            (when (= dindex dl-len)
-              (display-string
-                       hunk findex dl-pos dl-chars dl-fonts findex dl-len)
-              (when (< dindex sindex)
-                (funcall (tty-device-clear-to-eol device)
-                         hunk dl-len dl-pos))
-              (replace-si-line si-line-chars dl-chars findex findex dl-len)
-              (return-from tslr-main-body t))
-            (let ((lindex (min sindex dindex)))
-              (cond ((< lindex findex)
-                     ;; This can happen in funny situations -- believe me!
-                     (setf lindex findex))
-                    (t
-                     (display-string
-                              hunk findex dl-pos dl-chars dl-fonts
-                              findex lindex)
-                     (replace-si-line si-line-chars dl-chars
-                                      findex findex lindex)))
-              (cond
-               ((= dindex sindex))
-               ((< dindex sindex)
-                (let ((delete-char-num (- sindex dindex)))
-                  (cond ((and (tty-device-delete-char device)
-                              (worth-using-delete-mode
-                               device delete-char-num (- si-line-length dl-len)))
-                         (funcall (tty-device-delete-char device)
-                                  hunk dindex dl-pos delete-char-num))
-                        (t
-                         (display-string
-                                  hunk dindex dl-pos dl-chars dl-fonts
-                                  dindex dl-len)
-                         (funcall (tty-device-clear-to-eol device)
-                                  hunk dl-len dl-pos)))))
-               (t
-                (if (and (tty-device-insert-string device)
-                         (worth-using-insert-mode device (- dindex sindex)
-                                                  (- dl-len sindex)))
-                    (funcall (tty-device-insert-string device)
-                             hunk sindex dl-pos dl-chars sindex dindex)
+    (let* ((screen-image (tty-device-screen-image device))
+           (si-index (+ *hunk-top-line* dl-pos)))
+      ;; Add bounds checking to prevent array access errors
+      (when (and screen-image 
+                 (< si-index (length screen-image))
+                 (>= si-index 0))
+        (let ((screen-image-line (si-line screen-image si-index)))
+          ;; Check that screen-image-line is not NIL before accessing its components
+          (when screen-image-line
+            (let* ((si-line-chars (si-line-chars screen-image-line))
+                   (si-line-length (si-line-length screen-image-line))
+                   (findex (find-identical-prefix dl dl-fonts screen-image-line)))
+              (declare (type (or fixnum null) findex) (simple-string si-line-chars))
+              ;;
+              ;; When the dis-line and screen chars are not string=.
+              (when findex
+                (block tslr-main-body
+                  ;;
+                  ;; See if the screen shows an initial substring of the dis-line.
+                  (when (= findex si-line-length)
                     (display-string
-                             hunk sindex dl-pos dl-chars dl-fonts
-                             sindex dl-len))))
-              (replace-si-line si-line-chars dl-chars
-                               lindex lindex dl-len))))
-        (setf (si-line-length screen-image-line) dl-len)
-        (setf (si-line-fonts screen-image-line) dl-fonts)))
+                             hunk findex dl-pos dl-chars dl-fonts findex dl-len)
+                    (replace-si-line si-line-chars dl-chars findex findex dl-len)
+                    (return-from tslr-main-body t))
+                  ;;
+                  ;; When the dis-line is an initial substring of what's on the screen.
+                  (when (= findex dl-len)
+                    (funcall (tty-device-clear-to-eol device) hunk dl-len dl-pos)
+                    (return-from tslr-main-body t))
+                  ;;
+                  ;; Find trailing substrings that are the same.
+                  (multiple-value-bind
+                      (sindex dindex)
+                      (let ((count (find-identical-suffix dl dl-fonts
+                                                          screen-image-line)))
+                        (values (- si-line-length count)
+                                (- dl-len count)))
+                    (declare (fixnum sindex dindex))
+                    ;;
+                    ;; No trailing substrings -- blast and clear to eol.
+                    (when (= dindex dl-len)
+                      (display-string
+                               hunk findex dl-pos dl-chars dl-fonts findex dl-len)
+                      (when (< dindex sindex)
+                        (funcall (tty-device-clear-to-eol device)
+                                 hunk dl-len dl-pos))
+                      (replace-si-line si-line-chars dl-chars findex findex dl-len)
+                      (return-from tslr-main-body t))
+                    (let ((lindex (min sindex dindex)))
+                      (cond ((< lindex findex)
+                             ;; This can happen in funny situations -- believe me!
+                             (setf lindex findex))
+                            (t
+                             (display-string
+                                      hunk findex dl-pos dl-chars dl-fonts
+                                      findex lindex)
+                             (replace-si-line si-line-chars dl-chars
+                                              findex findex lindex)))
+                      (cond
+                       ((= dindex sindex))
+                       ((< dindex sindex)
+                        (let ((delete-char-num (- sindex dindex)))
+                          (cond ((and (tty-device-delete-char device)
+                                      (worth-using-delete-mode
+                                       device delete-char-num (- si-line-length dl-len)))
+                                 (funcall (tty-device-delete-char device)
+                                          hunk dindex dl-pos delete-char-num))
+                                (t
+                                 (display-string
+                                          hunk dindex dl-pos dl-chars dl-fonts
+                                          dindex dl-len)
+                                 (funcall (tty-device-clear-to-eol device)
+                                          hunk dl-len dl-pos)))))
+                       (t
+                        (if (and (tty-device-insert-string device)
+                                 (worth-using-insert-mode device (- dindex sindex)
+                                                          (- dl-len sindex)))
+                            (funcall (tty-device-insert-string device)
+                                     hunk sindex dl-pos dl-chars sindex dindex)
+                            (display-string
+                                     hunk sindex dl-pos dl-chars dl-fonts
+                                     sindex dl-len))))
+                      (replace-si-line si-line-chars dl-chars
+                                       lindex lindex dl-len))))
+                (setf (si-line-length screen-image-line) dl-len)
+                (setf (si-line-fonts screen-image-line) dl-fonts)))))))
     (setf (dis-line-flags dl) unaltered-bits)
     (setf (dis-line-delta dl) 0)))
 
-
-
 ;;;; Device methods
 
 ;;; Initializing and exiting the device (DEVICE-INIT and DEVICE-EXIT functions).

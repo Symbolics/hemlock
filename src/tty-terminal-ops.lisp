@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
 ;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: Unlicense
 ;;;
@@ -7,7 +7,6 @@
 ;;; This file provides a centralized, cached abstraction layer for terminal
 ;;; operations, eliminating repetitive terminfo capability checking patterns
 ;;; and providing automatic ANSI fallbacks.
-;;;
 
 (in-package :hemlock-internals)
 

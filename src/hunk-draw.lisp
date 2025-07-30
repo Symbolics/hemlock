@@ -1,10 +1,11 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK.X11 -*-
+;;; Copyright (c) CMU All rights reserved.
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
 ;;; **********************************************************************
 ;;;
 ;;; Written by Bill Chiles and Rob MacLachlan.
@@ -27,7 +28,7 @@
 ;; --GB 2003-05-22
 
 (defparameter hunk-height-limit 80 "Maximum possible height for any hunk.")
-(defparameter hunk-width-limit 200 "Maximum possible width for any hunk.")
+(defparameter hunk-width-limit 256 "Maximum possible width for any hunk.")
 (defparameter hunk-top-border 2 "Clear area at beginning.")
 (defparameter hunk-left-border 10 "Clear area before first character.")
 (defparameter hunk-bottom-border 3 "Minimum Clear area at end.")
@@ -498,23 +499,3 @@
                  (xlib:draw-rectangle xwindow gcontext x y3 1 3 t)))
           (incf x font-width))))))
 
-;; $Log: hunk-draw.lisp,v $
-;; Revision 1.2  2004-09-03 23:06:48  abakic
-;; Changes to get rid of warnings and notes. As a side-effect, more code
-;; has been commented out. There should be no more warnings nor notes
-;; with CMUCL, and only two style warnings with SBCL. Not tested with
-;; other implementations yet. TODO: spread key bindings to different
-;; files.
-;;
-;; Revision 1.1.1.1  2004/07/09 13:38:02  gbaumann
-;; import
-;;
-;; Revision 1.5  2004/05/26 16:36:39  gilbert
-;; DEVICE, BITMAP-DEVICE and TTY-DEVICE are now CLOS classes. Made the
-;; former DEVICE-xyz slots into methods in a feeble attempt to separate
-;; the device from the rest of Hemlock.
-;;
-;; Revision 1.4  2003/08/05 19:54:17  gilbert
-;; - did away with some macros
-;; - invested in a left margin for added readability of hemlock frames.
-;;

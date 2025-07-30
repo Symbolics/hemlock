@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Base: 10; Syntax: ANSI-Common-Lisp; Package: HI -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HI -*-
 ;;; Copyright (c) 2025 by Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: Unlicense
 

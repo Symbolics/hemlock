@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
 ;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: ?
 
