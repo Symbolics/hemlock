@@ -205,7 +205,6 @@
 
                (:file "comments")
                (:file "overwrite")
-               #+nil ; port to new event model.
                (:file "abbrev")
                (:file "icom")
                (:file "defsyn")
