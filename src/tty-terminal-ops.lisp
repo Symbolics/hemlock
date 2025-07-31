@@ -188,28 +188,3 @@
   (when (and standout (not (terminal-attributes-standout *current-attributes*)))
     (term-enter-standout)
     (setf (terminal-attributes-standout *current-attributes*) standout)))
-
-;;; Compatibility functions - these replace the existing functions in tty-display.lisp
-(defun setaf (color)
-  "Set foreground color (legacy compatibility function)."
-  (term-set-foreground color))
-
-(defun setab (color)
-  "Set background color (legacy compatibility function)."
-  (term-set-background color))
-
-(defun enter-bold-mode ()
-  "Enter bold mode (legacy compatibility function)."
-  (term-enter-bold))
-
-(defun enter-italics-mode ()
-  "Enter italics mode (legacy compatibility function)."
-  (term-enter-italics))
-
-(defun enter-underline-mode ()
-  "Enter underline mode (legacy compatibility function)."
-  (term-enter-underline))
-
-(defun exit-attribute-mode ()
-  "Exit all attribute modes (legacy compatibility function)."
-  (term-exit-attributes))

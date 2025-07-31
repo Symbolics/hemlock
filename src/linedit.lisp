@@ -219,7 +219,7 @@
 
 (defmethod device-exit ((device linedit-device))
   (ensure-not-in-cm-mode device)
-  (exit-attribute-mode)
+  (term-exit-attributes)
   (tty-write-cmd (tty-device-standout-end-string device))
   (device-force-output device)
   (reset-input))
@@ -611,10 +611,10 @@
       (progn
         (unless (eq boldp previous-boldp)
           (if boldp
-              (enter-bold-mode)
-              (exit-attribute-mode)))
+              (term-enter-bold)
+              (term-exit-attributes)))
         (unless (eql font previous-font)
-          (setaf font))
+          (term-set-foreground font))
         (cond
           ((member c '(#\newline #\return))
            (tty-write-cmd (terminfo:tputs terminfo:cursor-down))
@@ -625,8 +625,8 @@
           (t
            (device-write-string (string c))
            (incf col)))))
-    (when boldp (exit-attribute-mode))
-    (unless (eql font *default-color*) (setaf *default-color*))
+    (when boldp (term-exit-attributes))
+    (unless (eql font *default-color*) (term-set-foreground *default-color*))
     (tty-write-cmd (terminfo:tputs terminfo:cursor-visible))
     (rem col width)))
 

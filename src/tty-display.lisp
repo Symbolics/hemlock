@@ -1330,30 +1330,7 @@ minimizing terminal I/O through intelligent change detection and update sequenci
 ;;; Writing strings (TTY-DEVICE-DISPLAY-STRING functions)
 
 ;;; Font attribute support: color, bold.
-;;; These functions are now replaced by the centralized terminal operations
-;;; but kept for backward compatibility.
-
-(defun setaf (color)
-  (term-set-foreground color))
-
-(defun setab (color)
-  (term-set-background color))
-
-(defun enter-bold-mode ()
-  (term-enter-bold))
-
-(defun enter-italics-mode ()
-  (term-enter-italics))
-
-(defun enter-underline-mode ()
-  (term-enter-underline))
-
-(defun exit-attribute-mode ()
-  (term-exit-attributes))
-
 (defvar *terminal-has-colors* :unknown)
-
-
 
 ;;; DISPLAY-STRING is used to put a string at (x,y) on the device.
 ;;;
@@ -1393,23 +1370,23 @@ minimizing terminal I/O through intelligent change detection and update sequenci
                                                ((listp font)
                                                 (getf font :fg)))))
                          (when (and foreground (<= 0 foreground 255))
-                           (setaf foreground)))
+                           (term-set-foreground foreground)))
                        (let ((background (and (listp font) (getf font :bg))))
                          (when (and background (<= 0 background 255))
-                           (setab background)))
+                           (term-set-background background)))
                        (let ((boldp (and (listp font) (getf font :bold))))
                          (when boldp
-                           (enter-bold-mode)))
+                           (term-enter-bold)))
                        (let ((italicp (and (listp font) (getf font :italic))))
                          (when italicp
-                           (enter-italics-mode)))
+                           (term-enter-italics)))
                        (let ((underlinep (and (listp font) (getf font :underline))))
                          (when underlinep
-                           (enter-underline-mode)))
+                           (term-enter-underline)))
                        ;; Force output of all color sequences before writing text
                        (force-output)
                        (device-write-string string posn new-posn))
-                   (exit-attribute-mode)))
+                   (term-exit-attributes)))
                 (t
                  ;; No color support - check if this is a modeline font and use standout
                  (let ((use-standout-p (and (listp font)
