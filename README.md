@@ -28,7 +28,7 @@ The X11 backend is the most full-featured and is almost the same as the original
 
 ## Getting Started
 
-This guide explains how to set up and start Hemlock from a Common Lisp REPL.
+This guide explains how to set up and start Hemlock from a Common Lisp REPL.  Also be sure to read the [wiki](https://github.com/Symbolics/hemlock/wiki) to understand where this version of Hemlock differs from the CMUCL documentation.
 
 ### Prerequisites
 

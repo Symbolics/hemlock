@@ -1,26 +1,120 @@
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HI -*-
 ;;; Copyright (c) 2003, 2004 Nikodemus Siivola, Julian Squires
-;;; Integrated into Hemlock 2010 by David Lichteblau
-;;; 
-;;; Permission is hereby granted, free of charge, to any person obtaining
-;;; a copy of this software and associated documentation files (the
-;;; "Software"), to deal in the Software without restriction, including
-;;; without limitation the rights to use, copy, modify, merge, publish,
-;;; distribute, sublicense, and/or sell copies of the Software, and to
-;;; permit persons to whom the Software is furnished to do so, subject to
-;;; the following conditions:
-;;; 
-;;; The above copyright notice and this permission notice shall be included
-;;; in all copies or substantial portions of the Software.
-;;; 
-;;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-;;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-;;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-;;; IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-;;; CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-;;; TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-;;; SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+;;; Copyright (c) 2010 David Lichteblau
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: MIT
+
+;;; linedit is a editor for stream I/O based data structures
+
+#|
+Some examples of where it is used include:
+
+* Slave lisp interaction
+* Interactive commands (like extended commands)
+* REPL buffers
+
+Where buffer line editing operates on an array of characters, linedit operates
+on a mixed I/O stream.  Although the keystrokes are the same, the functionality
+differs in that linedit is more a command-line editing interface that 
+provides:
+
+1. Interactive Line Editing - Similar to readline functionality in Unix shells
+2. REPL Integration - Provides the user interface for Lisp interaction
+3. History Management - Navigate through previously entered commands
+4. Completion - Tab completion for symbols, pathnames, and packages
+5. Incremental Search - Search through command history
+
+In 2010 David Lichteblau began integrating linedit:
+
+    https://github.com/sharplispers/linedit/tree/master
+
+into Hemlock.  It isn't clear what his plan actually was, but it seems reasonable
+to assume the goal was to use the I/O buffer editing capabilities of linedit
+and make them work in Hemlock.  There's a further note about this (without
+clarifiying) at https://github.com/sharplispers/linedit/blob/master/TODO
+where it says:
+
+    "Some of the terminal stuff is very similar to bits of TTY hemlock
+     * Maybe refactor into a library both can use?
+     * There may be other parts Linedit and Hemlock could share?
+    NOTE: I believe David Lichteblau did part of this from the hemlock direction.
+    Need to take a look at that and decide if Linedit should just become
+    a submodule of Hemlock, or what."
+
+The external linedit libary is not a drop-in replacement and requires
+hemlock specific integration such as:
+
+* Custom device class (linedit-device) that inherits from tty-device
+* Integration with Hemlock's redisplay system (*linedit-redisplay-mode*)
+* Hemlock command definitions (like "Linedit Complete", "Linedit Describe Symbol")
+* Buffer management that works with Hemlock's buffer system
+* Event loop integration
+
+My best guess is that this is what David was doing.  Unfortuntely the work
+appears to be incomplete due still missing functionality (compared to
+CMUCL Hemlock) and a couple of comments mentioning 'pending refactoring',
+four missing function in the compile warnings, numerous 'fixme's and
+several forms at the top-level that don't belong there.
+
+In my 2025 refactoring I have implemented the four missing functions,
+but technical debt remains and needs to be resolved.
+|#
 
 (in-package :hi)
+
+;;; SN: Implementing missing functions
+
+(defun file-kind (pathname)
+  (osicat:file-kind pathname))
+
+(defun read-link (pathname)
+  (osicat:read-link pathname))
+
+(defun relative-pathname-p (pathname)
+  "Return T if PATHNAME is relative, NIL if absolute"
+  (not (uiop:absolute-pathname-p pathname)))
+
+;; linedit only requires :HOME implement all for completeness
+(defun user-info (username)
+  "Get user information. Returns alist with at least :HOME key"
+  (handler-case
+      (let* ((user (if (or (null username) (string= username ""))
+                       (osicat:user-info (osicat-posix:getuid))  ; Current user
+                       (osicat:user-info username)))  ; Named user
+             (homedir (getf user :home)))
+        (when homedir
+          (list (cons :home homedir)
+                (cons :name (getf user :name))
+                (cons :uid (getf user :uid))
+                (cons :gid (getf user :gid))
+                (cons :shell (getf user :shell)))))
+    ;; Handle case where user doesn't exist - OSICAT signals a system-error
+    (osicat:system-error ()
+      nil)))
+
+;;; This returns full pathnames but we might need (uiop:pathname-name entry) or similar
+(defmacro with-directory-iterator ((next-fn directory) &body body)
+  "Create an iterator NEXT-FN that returns directory entries one at a time"
+  (let ((entries (gensym "ENTRIES"))
+        (dir (gensym "DIR")))
+    `(let* ((,dir ,directory)
+            (,entries (append (uiop:subdirectories ,dir)
+                            (uiop:directory-files ,dir))))
+       (flet ((,next-fn ()
+                (pop ,entries)))
+         ,@body))))
+
+;;; End of new functions
+
+
+
+;;; Variable definitions that need to be available throughout the file
+(defvar *linedit-buffers* nil
+  "List of buffers created for linedit functionality.")
+
+(defvar *linedit-redisplay-mode* :full-tty-redisplay
+  "Controls linedit redisplay behavior. Valid values:
+   :full-tty-redisplay, :partial-tty-redisplay, :no-redisplay, :linedit-redisplay")
 
 
 ;;;; LINEDIT-DEVICE: a minimal backend implemented as a subclass of TTY-DEVICE
@@ -82,8 +176,7 @@
 ;;;   (declare (ignore window))
 ;;;   )
 
-(defvar *linedit-redisplay-mode* :full-tty-redisplay)
-
+;;; SN: Top level flet? I'm suprised this works.
 (flet
     ((% (device window call-next-method)
        (ecase *linedit-redisplay-mode*
@@ -154,6 +247,7 @@
   ;; retries forever:
   (mark-window-display-as-done window))
 
+;; SN: At the top-level again?
 (iter::defclause-driver (for var in-buffer-lines buffer)
   "Lines of a buffer"
   (iter::top-level-check)
@@ -429,7 +523,7 @@
 
 
 (defmethod backend-columns ((backend linedit-device))
-  ;; fixme: as the hemlock backend
+  ;; FIXME: as the hemlock backend
   80)
 
 (defmethod backend-lines ((backend linedit-device))
@@ -570,6 +664,7 @@
   (when (and (< start end) (zerop (find-col str columns end)))
     (tty-write-cmd (terminfo:tputs terminfo:cursor-down))))
 
+;;; SN: A debugging function?
 ;;; (defun play ()
 ;;;   (iter
 ;;;     (let ((char (read-char *terminal-io*)))
@@ -678,7 +773,7 @@
 ;;;; LINEDIT-HISTORY
 
 ;;; Used to implement the history of line, the class LINEDIT-HISTORY
-;;; offers a simple browsable from of storage.
+;;; offers a simple browsable form of storage.
 ;;;
 ;;; It used to be called BUFFER in linedit, but was renamed to reduce
 ;;; confusion with hemlock buffers.
@@ -857,6 +952,7 @@ empty string."
 
 
 ;;;; stuff from main.lisp
+;;; SN: defvar *linedit-buffers* moved to top of file to quiet warnings
 
 (defvar *linedit-result* nil)
 
@@ -865,8 +961,6 @@ empty string."
 
 (defun current-device ()
   (window-device (current-window)))
-
-(defvar *linedit-buffers*)
 
 (defun linedit (&key (modes '("Fundamental"))
                      initial-string
@@ -965,6 +1059,7 @@ empty string."
 
 ;;;; Underlying functions for pathname completion
 
+#+(or)
 (defun pathname-directory-pathname (pathname)
   (make-pathname :name nil :type nil
                  :defaults pathname))
@@ -998,7 +1093,7 @@ to the appropriate home directory."
                (uname (subseq string 1 slash-index))
                (homedir (or (cdr (assoc :home (user-info uname)))
                             (chop (namestring 
-                                   (or (probe-file (user-homedir-pathname))
+                                   (or (uiop:probe-file* (user-homedir-pathname))
                                        (return-from tilde-expand-string 
                                          string)))))))
           (concatenate 'string homedir (or suffix ""))))
@@ -1010,7 +1105,7 @@ to the appropriate home directory."
          (all nil)
          (max 0)
          (string (tilde-expand-string string))
-         (dir (pathname-directory-pathname string))
+         (dir (uiop:pathname-directory-pathname string))
          (namefun (if (relative-pathname-p string)
                       #'namestring
                       (lambda (x) (namestring (merge-pathnames x))))))
@@ -1045,7 +1140,8 @@ to the appropriate home directory."
     (if (in-quoted-string-p editor)
         (if (logical-pathname-p string)
             (logical-pathname-complete string)
-            (directory-complete string))
+            (logical-pathname-p string))
+            ;;(directory-complete string)) ;is this what was intended?
         (let* ((length (length string))
                (first-colon (position #\: string))
                (last-colon (position #\: string :from-end t))
@@ -1118,7 +1214,7 @@ to the appropriate home directory."
 ;; FIXME: there used to be the help command seen below.  These days, an
 ;; implementation based on or similar to Describe Mode should replace
 ;; it.
-#+nil
+#+(or)
 (defun help (chord editor)
   (declare (ignore chord))
   (let ((pairs nil)
@@ -1213,7 +1309,7 @@ to the appropriate home directory."
   (declare (ignore p))
   (let* ((default (hemlock::symbol-string-at-point))
          (default (if (and default
-                           ;; Fixme: MARK-SYMBOL isn't very good, meaning that
+                           ;; FIXME: MARK-SYMBOL isn't very good, meaning that
                            ;; often we will get random forms rather than a
                            ;; symbol.  Let's at least catch the case where the
                            ;; result is more than a line long, and give up.
@@ -1233,9 +1329,9 @@ to the appropriate home directory."
                        :clear-screen-before-p :prompt
                        :split-screen-p t)))))
 
-;; fixme: clear-screen-before-p, clear-screen-after-p seemed like a
+;; FIXME: clear-screen-before-p, clear-screen-after-p seemed like a
 ;; really cool idea until I learned that on most terminals [except GNU
-;; screen] entering or existing cm mode destroys screen contents anyway.
+;; screen] entering or exiting cm mode destroys screen contents anyway.
 (defun tty-excursion
     (fun &key (clear-screen-before-p t)
               (clear-screen-after-p t)
@@ -1289,7 +1385,7 @@ to the appropriate home directory."
   (tty-excursion (lambda ()
                    (hemlock::find-file-command nil "/etc/passwd"))))
 
-;; fixme: would be cooler if this didn't clear the screen.
+;; FIXME: would be cooler if this didn't clear the screen.
 ;; TTY-EXCURSION would be more effective if Unix terminals weren't that
 ;; useless.  Perhaps we should give up and do without it.
 (defcommand "Linedit Fuzzy Complete"

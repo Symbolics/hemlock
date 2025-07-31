@@ -14,7 +14,7 @@
 
 (pushnew :tty hi::*available-backends*)
 
-
+
 ;;;; Get terminal attributes:
 
 (defvar *terminal-baud-rate* nil)
@@ -46,13 +46,13 @@
                                    (logxor baud unix::tty-cbaudex))))))
                    #-(or CMU scl) 4800))
     (setf *terminal-baud-rate* baud-rate)
-    (cffi:with-foreign-object (ws 'osicat-posix::winsize)
+    (cffi:with-foreign-object (ws '(:struct osicat-posix::winsize))
       (osicat-posix:ioctl fd osicat-posix:tiocgwinsz ws)
       (cffi:with-foreign-slots ((osicat-posix::row osicat-posix::col)
-                                ws osicat-posix::winsize)
+                                ws (:struct osicat-posix::winsize))
         (values osicat-posix::row osicat-posix::col baud-rate)))))
 
-
+
 ;;;; Output routines and buffering.
 
 (defconstant redisplay-output-buffer-length 256)
@@ -212,7 +212,7 @@
   (device-force-output device))
 
 
-
+
 ;;;; Terminal init and exit methods.
 
 (defmethod device-init ((device tty-device))
@@ -239,7 +239,7 @@
   (device-force-output device)
   (reset-input))
 
-
+
 ;;;; Screen image line hacks.
 
 (defun replace-si-line (dst-string src-string src-start dst-start dst-end)
@@ -286,14 +286,14 @@ wrapper around the standard REPLACE function with added bounds checking."
 (defun setup-input ()
   (let ((fd 1 #+nil *editor-file-descriptor*))
     (when (plusp (osicat-posix::isatty fd))
-      (cffi:with-foreign-object (tios 'osicat-posix::termios)
+      (cffi:with-foreign-object (tios '(:struct osicat-posix::termios))
         (osicat-posix::tcgetattr fd tios)
         (cffi:with-foreign-slots ((osicat-posix::iflag
                                    osicat-posix::oflag
                                    osicat-posix::cflag
                                    osicat-posix::lflag
                                    osicat-posix::cc)
-                                  tios osicat-posix::termios)
+                                  tios (:struct osicat-posix::termios))
           (setf *old-c-iflag* osicat-posix::iflag)
           (setf *old-c-oflag* osicat-posix::oflag)
           (setf *old-c-cflag* osicat-posix::cflag)
@@ -309,7 +309,7 @@ wrapper around the standard REPLACE function with added bounds checking."
                           (ccref osicat-posix::cflag-vstart)
                           (ccref osicat-posix::cflag-vstop)
                           (ccref osicat-posix::cflag-vsusp)
-                          (when (boundp 'osicat-posix::cflag-vdsusp)
+                          (when (boundp 'osicat-posix::cflag-vdsusp) ;will issue compile time warning that can be ignored
                             (ccref osicat-posix::cflag-vdsusp))
                           (ccref osicat-posix::cflag-vmin)
                           (ccref osicat-posix::cflag-vtime)))
@@ -426,14 +426,14 @@ wrapper around the standard REPLACE function with added bounds checking."
 (defun reset-input ()
   (let ((fd 1 #+nil *editor-file-descriptor*))
     (when (plusp (osicat-posix::isatty fd))
-      (cffi:with-foreign-object (tios 'osicat-posix::termios)
+      (cffi:with-foreign-object (tios '(:struct osicat-posix::termios))
         (osicat-posix::tcgetattr fd tios)
         (cffi:with-foreign-slots ((osicat-posix::iflag
                                    osicat-posix::oflag
                                    osicat-posix::cflag
                                    osicat-posix::lflag
                                    osicat-posix::cc)
-                                  tios osicat-posix::termios)
+                                  tios (:struct osicat-posix::termios))
           (setf osicat-posix::iflag *old-c-iflag*)
           (setf osicat-posix::oflag *old-c-oflag*)
           (setf osicat-posix::cflag *old-c-cflag*)

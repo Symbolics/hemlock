@@ -49,7 +49,7 @@
                         :directory
                         (pathname-directory *hemlock-base-directory*)
                         :defaults *hemlock-base-directory*)
-     :depends-on (#-scl :alexandria
+     :depends-on (:alexandria
                   :bordeaux-threads
                   :conium
                   :trivial-gray-streams
@@ -59,7 +59,7 @@
                   :iolib
                   :iolib/os
                   :cl-ppcre
-                  #-scl :command-line-arguments)
+                  :command-line-arguments)
     :components
     ((:module core-1
               :pathname #.(merge-pathnames

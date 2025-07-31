@@ -1,14 +1,9 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
-;;;
-;;; **********************************************************************
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK -*-
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
+
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
-;;; **********************************************************************
-;;;
-;;; Some bindings:
-;;;
 
 (in-package :hemlock)
 
@@ -524,6 +519,7 @@
 (bind-key "Word Abbrev Prefix Mark" #k"meta-\"")
 ;; (bind-key "Unexpand Last Word" #k"control-x u")
 
+;; Pressing any of these keys will trigger the abbreviation expansion
 (dolist (key (list #k"!" #k"~" #k"@" #k"#" #k";" #k"$" #k"%" #k"^" #k"&" #k"*"
                    #k"\-" #k"_" #k"=" #k"+" #k"[" #k"]" #k"(" #k")" #k"/" #k"|"
                    #k":" #k"'" #k"\"" #k"{" #k"}" #k"," #k"\<" #k"." #k"\>"

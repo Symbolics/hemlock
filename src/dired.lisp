@@ -1,15 +1,14 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; Copyright (c) CMU All rights reserved.
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
 ;;;
 ;;; **********************************************************************
 ;;; This code was written as part of the CMU Common Lisp project at
 ;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;;
 ;;; **********************************************************************
 ;;;
-;;; This file contains site dependent code for dired.
-;;; Written by Bill Chiles.
-;;;
+;;;    Written by Bill Chiles.
 
 (defpackage :dired
   (:shadow #:rename-file #:delete-file)
@@ -287,7 +286,7 @@
 
 (defun do-the-copy (ses-name1 ses-name2 secs1)
   (with-open-file (input ses-name1 :element-type '(unsigned-byte 8) :direction :input)
-    (with-open-file (output ses-name2 :element-type '(unsinged-byte 8) :direction :output
+    (with-open-file (output ses-name2 :element-type '(unsigned-byte 8) :direction :output
                             :if-exists :supersede)
       (loop
         (let ((byte (read-byte input nil nil)))

@@ -1,4 +1,6 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: CL-USER -*-
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: ?
 
 (in-package :cl-user)
 
@@ -584,8 +586,7 @@
    #:default-directory
    #:set-file-permissions
    #:ambiguous-files
-   #:print-directory
-   ))
+   #:print-directory))
 
 (defpackage :hemlock-internals
   (:use :common-lisp :hemlock-interface
@@ -876,48 +877,3 @@
 
 (defpackage :hemlock-user
     (:use :common-lisp :hemlock-interface))
-
-;; $Log: package.lisp,v $
-;; Revision 1.4  2004-09-03 23:06:51  abakic
-;; Changes to get rid of warnings and notes. As a side-effect, more code
-;; has been commented out. There should be no more warnings nor notes
-;; with CMUCL, and only two style warnings with SBCL. Not tested with
-;; other implementations yet. TODO: spread key bindings to different
-;; files.
-;;
-;; Revision 1.3  2004/08/10 05:58:04  rstrandh
-;; Removed logical-key-event-name and logical-key-event-documentation
-;; as they were never used.
-;;
-;; Revision 1.2  2004/08/10 05:24:16  rstrandh
-;; Removed the string table *logical-key-event-names* as it was never
-;; used, only written to.
-;;
-;; Added #k"control=[" as an alias for ESCAPE, because that is what
-;; I use all the time (rather than trying to find the META key).
-;;
-;; Revision 1.1  2004/07/09 15:00:36  gbaumann
-;; Let us see if this works.
-;;
-;; Revision 1.9  2003/08/05 19:58:21  gilbert
-;; - we now have a HEMLOCK-INTERFACE package which exports symbols mentioned
-;;   in the Command Implementors Manual.
-;;
-;; Revision 1.8  2003/07/28 20:35:32  jdz
-;; BEEP function now works.
-;;
-;; Revision 1.7  2003/07/27 10:11:06  jdz
-;; HEMLOCK-EXT package is now used by HEMLOCK.  Conflicting symbols from
-;; EXTENSIONS package in CMUCL are shadowed.
-;;
-;; Revision 1.6  2003/05/12 11:01:48  gbyers
-;; Conditionalize (Gray streams package) for OpenMCL.
-;;
-;; Revision 1.5  2003/03/26 07:50:10  gilbert
-;; Port to SCL by Douglas Crosher
-;;
-;; Revision 1.4  2003/03/06 21:38:58  gilbert
-;; The symbol *FAST* is now exported from HI (no idea if that is the
-;; right thing to do) and imported into HEMLOCK. Fixes bug:
-;; auto-save.lisp was not compiling.
-;;
