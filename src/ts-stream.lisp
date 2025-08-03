@@ -1,19 +1,13 @@
-;;;; -*- Mode: Lisp; indent-tabs-mode: nil -*-
-;;;
-;;; **********************************************************************
-;;; This code was written as part of the CMU Common Lisp project at
-;;; Carnegie Mellon University, and has been placed in the public domain.
-;;;
-;;; **********************************************************************
-;;;
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK -*-
+;;; Copyright (c) ? William Lott
+;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
+;;; SPDX-License-identifier: Unlicense
+
 ;;; This file implements typescript streams.
 ;;;
 ;;; A typescript stream is a bidirectional stream which uses remote
-;;; function calls to interact with a Hemlock typescript buffer. That
+;;; function calls to interact with a Hemlock typescript buffer.  That
 ;;; is: the code in this file is executed on the slave side.
-;;;
-;;; Written by William Lott.
-;;;
 
 (in-package :hemlock)
 
@@ -269,7 +263,7 @@
 ;;; Output a single character to stream.
 ;;;
 (defmethod hi::stream-write-char ((stream ts-stream) char)
-  (declare (base-char char))
+  (declare (character char))
   (when (= (ts-stream-output-buffer-index stream)
            ts-stream-output-buffer-size)
     (%ts-stream-flsbuf stream))
@@ -412,12 +406,3 @@
     ((stream ts-stream) (seq string) start end &key)
   (iter:iter (iter:for i from start below end)
              (setf (elt seq i) (read-char stream))))
-
-;; $Log: ts-stream.lisp,v $
-;; Revision 1.1  2004-07-09 13:38:55  gbaumann
-;; Initial revision
-;;
-;; Revision 1.3  2003/08/05 19:51:13  gilbert
-;; initial slave lisp support, still not ready for prime time.
-;;
-;;
