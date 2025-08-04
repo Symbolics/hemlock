@@ -36,6 +36,17 @@
 (defmethod invoke-later ((backend (eql :iolib)) fun)
   (iolib.multiplex:add-timer *event-base* fun 0 :one-shot t))
 
+#|
+I should have known something so simple was too good to be true.
+
+The problem is that we don't know which thread is going to received
+the signal, and if it's not the main event loop then redisplay-all
+will fail.
+
+See https://stackoverflow.com/questions/79724520/signal-handling-in-multi-threaded-scenario
+
+for a question I asked on how this might be handled.
+
 (defmacro set-signal-handler (signo &body body)
   (let ((handler (gensym "HANDLER")))
     `(progn
@@ -46,7 +57,7 @@
 
 (set-signal-handler osicat-posix:sigwinch
   (redisplay-all))
-
+|#
 ;;;;
 ;;;; IOLIB-CONNECTION
 ;;;;
