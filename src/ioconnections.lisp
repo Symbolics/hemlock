@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HEMLOCK-INTERNALS -*-
+;;; -*- Mode: LISP; Syntax: ANSI-Common-Lisp; Package: HI -*-
 ;;; Copyright (c) 2025 Symbolics Pte. Ltd. All rights reserved.
 ;;; SPDX-License-identifier: ?
 
@@ -36,6 +36,16 @@
 (defmethod invoke-later ((backend (eql :iolib)) fun)
   (iolib.multiplex:add-timer *event-base* fun 0 :one-shot t))
 
+(defmacro set-signal-handler (signo &body body)
+  (let ((handler (gensym "HANDLER")))
+    `(progn
+       (cffi:defcallback ,handler :void ((signo :int))
+         (declare (ignore signo))
+         ,@body)
+       (cffi:foreign-funcall "signal" :int ,signo :pointer (cffi:callback ,handler)))))
+
+(set-signal-handler osicat-posix:sigwinch
+  (redisplay-all))
 
 ;;;;
 ;;;; IOLIB-CONNECTION
@@ -54,8 +64,7 @@
                   :accessor connection-write-buffers)))
 
 (defmethod initialize-instance :after
-    ((instance iolib-connection) &key)
-  )
+    ((instance iolib-connection) &key))
 
 (defmethod (setf connection-read-fd)
     :after
