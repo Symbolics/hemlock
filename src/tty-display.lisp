@@ -300,9 +300,41 @@ when dimensions haven't changed, making it safe to call on every redisplay."
       (when width-changed-p
         (handle-width-change device lines adjusted-cols old-cols old-lines))
       
-      ;; Handle height changes
+      ;; Handle height changes - pass old-lines so delta can be calculated correctly
       (when height-changed-p
-        (handle-height-change device lines)))))
+        (handle-height-change device lines old-lines)))))
+
+(defun handle-height-change (device lines old-lines)
+  "Handle terminal height changes by adjusting window sizes."
+  ;; Calculate delta using the passed old-lines value
+  (let ((delta (- lines old-lines)))
+    (setf (tty-device-lines device) lines)
+    
+    ;; For height changes, we might not need to rebuild the entire screen image
+    ;; Just adjust the size if needed
+    (let ((current-screen-image (tty-device-screen-image device)))
+      (when current-screen-image
+        (let ((current-size (length current-screen-image)))
+          (when (/= current-size lines)
+            ;; Only rebuild if the array size doesn't match
+            (set-up-screen-image device)))))
+    
+    ;; Adjust window sizes BEFORE marking for redraw
+    (enlarge-device device delta)
+    
+    ;; Force full redraw
+    (setf *screen-image-trashed* t)
+    
+    ;; Update and mark all windows for redraw
+    (dolist (window *window-list*)
+      (when (window-on-device-p window device)
+        ;; Ensure window has valid height before redraw
+        (let* ((hunk (window-hunk window))
+               (window-height (tty-hunk-text-height hunk)))
+          (when (and (plusp window-height) 
+                     (<= window-height lines))
+            (mark-window-for-full-redraw window)
+            (update-window-image window)))))))
 
 (defun handle-width-change (device lines adjusted-cols old-cols old-lines)
   "Handle terminal width changes by rebuilding screen image and updating windows."
@@ -324,20 +356,19 @@ when dimensions haven't changed, making it safe to call on every redisplay."
   ;; Update all windows on this device
   (dolist (window *window-list*)
     (when (window-on-device-p window device)
-      (update-window-for-width-change window adjusted-cols old-cols))))
-
-(defun handle-height-change (device lines)
-  "Handle terminal height changes by adjusting window sizes."
-  (let ((old-lines (tty-device-lines device)))
-    ;; Calculate delta BEFORE updating device lines
-    (let ((delta (- lines old-lines)))
-      (setf (tty-device-lines device) lines)
-      (enlarge-device device delta)
+      (update-window-for-width-change window adjusted-cols old-cols)
       
-      ;; Update window heights
-      (dolist (window *window-list*)
-        (when (window-on-device-p window device)
-          (update-window-height window lines))))))
+      ;; Force all dis-lines to be marked as changed so they will be redrawn
+      (do ((dl (window-first-line window) (cdr dl)))
+          ((eq dl the-sentinel))
+        (when (and (consp dl) (car dl) (typep (car dl) 'dis-line))
+          (let ((dis-line (car dl)))
+            ;; Mark the dis-line as changed to force redraw
+            (setf (dis-line-flags dis-line) 
+                  (logior (dis-line-flags dis-line) changed-bit))))))))
+
+
+
 
 (defun window-on-device-p (window device)
   "Return T if WINDOW is displayed on DEVICE."
@@ -378,13 +409,26 @@ when dimensions haven't changed, making it safe to call on every redisplay."
         (old-chars (dis-line-old-chars dis-line))
         (current-capacity (length (dis-line-chars dis-line))))
     
-    ;; Resize buffer if needed
+    ;; Resize buffer if needed, preserving content
     (when (< current-capacity adjusted-cols)
-      (resize-dis-line-buffer dis-line adjusted-cols))
+      (let* ((old-content (dis-line-chars dis-line))
+             (old-length (dis-line-length dis-line))
+             (new-capacity (* 2 adjusted-cols))
+             (new-buffer (make-string new-capacity)))
+        ;; Copy existing content to new buffer
+        (when (and old-content (> old-length 0))
+          (replace new-buffer old-content 
+                   :end1 (min old-length new-capacity)
+                   :end2 old-length))
+        (setf (dis-line-chars dis-line) new-buffer)))
+    
+    ;; Always mark as changed for width changes to force redraw
+    (setf (dis-line-flags dis-line) 
+          (logior (dis-line-flags dis-line) changed-bit))
     
     ;; Clear cache for lines that need re-wrapping
     (when (and line old-chars (line-needs-rewrap-p line old-chars adjusted-cols old-cols))
-      (clear-dis-line-cache dis-line))))
+      (setf (dis-line-old-chars dis-line) nil))))
 
 (defun resize-dis-line-buffer (dis-line new-cols)
   "Resize DIS-LINE's character buffer for NEW-COLS width."
@@ -474,20 +518,25 @@ unnecessary character transmission, making it suitable for:
   (let* ((first (window-first-line window))
          (hunk (window-hunk window))
          (device (device-hunk-device hunk))
-         (screen-image (tty-device-screen-image device)))
+         (screen-image (tty-device-screen-image device))
+         (screen-image-size (length screen-image)))
     (funcall (tty-device-clear-to-eow device) hunk 0 0)
     (do ((i 0 (1+ i))
          (dl (cdr first) (cdr dl)))
         ((eq dl the-sentinel)
          (setf (window-old-lines window) (1- i))
          (select-hunk hunk)
-         (do ((last (tty-hunk-text-position hunk))
+         (do ((last (min (tty-hunk-text-position hunk)
+                         (1- screen-image-size)))
               (i (+ *hunk-top-line* i) (1+ i)))
              ((> i last))
            (declare (fixnum i last))
-           (let ((si-line (si-line screen-image i)))
-             (setf (si-line-length si-line) 0)
-             (setf (si-line-fonts si-line) nil))))
+           ;; Add bounds check before accessing screen image
+           (when (< i screen-image-size)
+             (let ((si-line (si-line screen-image i)))
+               (when si-line  ; Additional safety check
+                 (setf (si-line-length si-line) 0)
+                 (setf (si-line-fonts si-line) nil))))))
       (tty-dumb-line-redisplay device hunk (car dl) i))
     (setf (window-first-changed window) the-sentinel
           (window-last-changed window) first)
@@ -497,6 +546,7 @@ unnecessary character transmission, making it suitable for:
         (funcall (tty-device-clear-to-eol device) hunk 0 y)
         (tty-dumb-line-redisplay device hunk dl y)
         (setf (dis-line-flags dl) unaltered-bits)))))
+
 
 
 ;;;; Dumb redisplay top n lines of a window.
