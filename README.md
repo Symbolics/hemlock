@@ -8,27 +8,24 @@ Hemlock is an Emacs-style text editor written in Common Lisp. It provides three 
 
 The X11 backend is the most full-featured and is almost the same as the original CMUCL IDE.
 
-## Built With
-
-- [alexandria](https://github.com/quek/alexandria)
-- [bordeaux-threads](https://github.com/sionescu/bordeaux-threads)
-- [conium](https://github.com/sharplispers/conium)
-- [trivial-gray-streams](https://github.com/trivial-gray-streams/trivial-gray-streams)
-- [iterate](https://github.com/nablaone/iterate)
-- [prepl](https://github.com/s-expressionists/prepl)
-- [osicat](https://github.com/osicat/osicat)
-- [iolib](https://github.com/sionescu/iolib)
-- [cl-ppcre](https://github.com/edicl/cl-ppcre)
-- [command-line-arguments](https://github.com/sionescu/command-line-arguments)
-- [clx](https://github.com/sharplispers/clx)
-- [qt](https://github.com/commonqt/commonqt)
-- [qt-repl](https://github.com/commonqt/qt-repl)
-
 <img width="935" height="992" alt="Screenshot 2025-07-28 143156" src="https://github.com/user-attachments/assets/ac91891e-2a48-4312-a5e0-64d26fbc85b6" />
+
+## Status
+
+Suitable for daily use.  Customisation is easy.  If you add a command, please open a pull request to
+add it to the main system.
 
 ## Getting Started
 
 This guide explains how to set up and start Hemlock from a Common Lisp REPL.  Also be sure to read the [wiki](https://github.com/Symbolics/hemlock/wiki) to understand where this version of Hemlock differs from the CMUCL documentation.
+
+### Coming from Emacs
+
+* M-x slime -> M-X 'Start Slave Thread'
+* If you resize the terminal, use C-l to redisplay the content (we're working on this)
+* The help system is pretty good in Hemlock.  Use C-h or the HOME key to invoke it, and key an 
+eye on the mode line for more hints.
+* Putty messes up the right Meta (alt) key.  Windows now includes SSH that handles this properly.
 
 ### Prerequisites
 

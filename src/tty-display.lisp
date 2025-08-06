@@ -175,7 +175,24 @@
 
 ;;; Font support.
 
+;;; We need a more comprehensive font handling scheme, perhaps along with
+;;; theming.  For now the workaround below checks for Fundamental mode and
+;;; prevents syntax highlighting from bleeding through from other modes.
+;;; The 'right' way to do this is probably to obtain the current
+;;; readtable/syntax from the file buffer mode line, e.g. "Syntax:
+;;; ANSI-Common-Lisp" and use that for the highlighting syntax.
 (defun compute-font-usages (dis-line)
+  ;; Check if we should suppress syntax highlighting based on mode
+  (let ((line (dis-line-line dis-line)))
+    (when (and line (line-buffer line))
+      (let* ((buffer (line-buffer line))
+             (mode (buffer-major-mode buffer)))
+        ;; In Fundamental mode, return nil (no font changes)
+        (when (or (string= mode "Fundamental")
+                  (string= mode "Text"))
+          (return-from compute-font-usages nil)))))
+  
+  ;; Original implementation for other modes
   (do ((results nil)
        (change (dis-line-font-changes dis-line) (font-change-next change))
        (prev nil change))
@@ -195,6 +212,7 @@
                        (font-change-x prev)
                        (font-change-x change))
                 results))))))
+
 
 
 ;;;; Dumb window redisplay.
